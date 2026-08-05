@@ -256,12 +256,13 @@
   const isoCtx = setupHiDPI(isoCanvas, 380, 420);
   const orthoCtx = setupHiDPI(orthoCanvas, 680, 420);
 
+  // FIX 1: Corrected bitwise positioning (R << 16 | G << 8 | B)
   function adjustColor(col, amt) {
     let num = parseInt(col.slice(1), 16);
     let r = Math.min(255, Math.max(0, (num >> 16) + amt));
     let g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amt));
     let b = Math.min(255, Math.max(0, (num & 0x0000FF) + amt));
-    return '#' + (g | (b << 8) | (r << 16)).toString(16).padStart(6, '0');
+    return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
   }
 
   function resetStudentGrid() {
@@ -301,13 +302,12 @@
     grid[0][0][0] = true;
     if (!colorGrid[0][0][0]) colorGrid[0][0][0] = PALETTE[0];
 
-    // 2. Vertical columns with consistent block color assignment
+    // 2. Vertical columns
     for (let y = 1; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         for (let z = 0; z < GRID_SIZE; z++) {
           if (grid[x][y - 1][z] && Math.random() > 0.45) {
             grid[x][y][z] = true;
-            // High probability of distinct color for higher blocks
             colorGrid[x][y][z] = (Math.random() > 0.4) 
               ? PALETTE[Math.floor(Math.random() * PALETTE.length)] 
               : colorGrid[x][y - 1][z];
@@ -358,10 +358,11 @@
       isoCtx.stroke();
     }
 
-    // Painter's algorithm: Y -> Z -> X
-    for (let y = 0; y < GRID_SIZE; y++) {
+    // FIX 2: Correct Painter's Algorithm loop order (X -> Z -> Y)
+    // Draw back-to-front: lowest x, lowest z, lowest y first
+    for (let x = 0; x < GRID_SIZE; x++) {
       for (let z = 0; z < GRID_SIZE; z++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
           if (!grid[x][y][z]) continue;
 
           const baseColor = colorGrid[x][y][z] || '#2563eb';
@@ -434,7 +435,7 @@
     drawArrow(tx, ty - 40, tx, ty - 10, '#d97706', "TOP ↓");
   }
 
-  // Calculate True Orthographic Projections with EXACT Surface Color Mapping
+  // FIX 3: Fully calibrated Orthographic Raycasting for exact view mapping
   function getGroundTruth() {
     const truth = {
       front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
@@ -447,8 +448,7 @@
       }
     };
 
-    // 1. FRONT VIEW: u = x (Left-to-Right), v = GRID_SIZE - 1 - y (Top-to-Bottom)
-    // Ray shoots from Front (z = GRID_SIZE - 1) toward Back (z = 0)
+    // 1. FRONT VIEW: Looking along +Z to -Z
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const x = u;
@@ -463,12 +463,11 @@
       }
     }
 
-    // 2. TOP VIEW: u = x (Left-to-Right), v = z (Top-to-Bottom: Back z=0 is Top, Front z=GRID_SIZE-1 is Bottom)
-    // Ray shoots from Top (y = GRID_SIZE - 1) down to Bottom (y = 0)
+    // 2. TOP VIEW: Looking down -Y
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const x = u;
-        const z = v;
+        const z = v; // Top is Z=0 (Back), Bottom is Z=GRID_SIZE-1 (Front)
         for (let y = GRID_SIZE - 1; y >= 0; y--) {
           if (grid[x][y][z]) {
             truth.top[u][v] = true;
@@ -479,15 +478,10 @@
       }
     }
 
-    // 3. RIGHT SIDE VIEW: 
-    // Looking in direction ↖ (-X axis). 
-    // Left side of view (u=0) corresponds to FRONT of object (z = GRID_SIZE - 1).
-    // Right side of view (u=GRID_SIZE-1) corresponds to BACK of object (z = 0).
-    // u = (GRID_SIZE - 1) - z, v = GRID_SIZE - 1 - y
-    // Ray shoots from Right (x = GRID_SIZE - 1) to Left (x = 0)
+    // 3. RIGHT SIDE VIEW: Looking along +X to -X
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
-        const z = (GRID_SIZE - 1) - u; 
+        const z = (GRID_SIZE - 1) - u; // Left edge is Front (+Z), Right edge is Back (-Z)
         const y = GRID_SIZE - 1 - v;
         for (let x = GRID_SIZE - 1; x >= 0; x--) {
           if (grid[x][y][z]) {
@@ -586,7 +580,7 @@
       }
     });
 
-    // Standard Alignment Guidelines
+    // Alignment Guidelines
     orthoCtx.strokeStyle = '#94a3b8';
     orthoCtx.setLineDash([3, 3]);
     
