@@ -118,7 +118,7 @@
             background: #fafafa;
             border-radius: 6px;
             overflow: hidden;
-            touch-action: none; /* Crucial for enabling touch rotation on iPads & mobile */
+            touch-action: none; /* Crucial for touch rotation on tablets/phones */
             cursor: grab;
         }
 
@@ -143,7 +143,7 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             grid-template-rows: auto auto;
-            gap: 16px;
+            gap: 24px;
             margin-top: 16px;
         }
 
@@ -162,8 +162,8 @@
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(3, 30px);
-            grid-template-rows: repeat(3, 30px);
+            grid-template-columns: repeat(3, 34px);
+            grid-template-rows: repeat(3, 34px);
             gap: 2px;
             background-color: #cbd5e0;
             padding: 2px;
@@ -173,11 +173,39 @@
         .cell {
             background-color: white;
             cursor: pointer;
-            transition: background 0.15s ease;
+            transition: all 0.15s ease;
+            position: relative;
         }
 
         .cell.active {
             background-color: #3182ce;
+        }
+
+        /* Verification Feedback Styles */
+        .cell.correct {
+            background-color: #10b981 !important; /* Green */
+        }
+
+        .cell.incorrect {
+            background-color: #ef4444 !important; /* Red */
+        }
+
+        .cell.missed {
+            background-color: #fca5a5 !important; /* Light Red */
+        }
+
+        /* Reveal Solution Overlay Styles */
+        .cell.solution-overlay::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            right: 2px;
+            bottom: 2px;
+            border: 2px solid #2563eb;
+            background-color: rgba(37, 99, 235, 0.25);
+            pointer-events: none;
+            border-radius: 2px;
         }
 
         .overlay-check {
@@ -187,6 +215,13 @@
             gap: 8px;
             font-size: 0.9rem;
             color: #4a5568;
+            user-select: none;
+        }
+
+        .overlay-check input {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
         }
     </style>
     <!-- Three.js Library -->
@@ -248,28 +283,31 @@
 <script>
     // --- Global Variables ---
     const GRID_SIZE = 3;
-    let scene, camera, renderer, modelGroup, labelGroup;
-    let activeBlocks = []; // Array of {x, y, z, color}
+    let scene, camera, renderer, modelGroup;
+    let activeBlocks = []; // [{x, y, z, color}]
+    let solutionProjections = { top: [], front: [], right: [] };
     
-    // Interaction Variables (Mouse & Touch)
+    // Touch & Mouse Control
     let isDragging = false;
     let previousPosition = { x: 0, y: 0 };
     const defaultRotation = { x: 0.4, y: -0.6 };
 
-    // Distinct block colors for clarity
     const COLORS = [0x3182ce, 0xe53e3e, 0x38a169, 0xd69e2e, 0x805ad5, 0xdd6b20];
 
-    // --- Initialize Application ---
+    // --- Init App ---
     window.addEventListener('DOMContentLoaded', () => {
         initThreeJS();
         setupOrthographicGrids();
         setupTouchAndMouseEvents();
         generateNewSolidModel();
         
-        // Buttons
+        // Button Event Listeners
         document.getElementById('btn-new').addEventListener('click', generateNewSolidModel);
         document.getElementById('btn-reset').addEventListener('click', resetView);
         document.getElementById('btn-clear').addEventListener('click', clearGrids);
+        document.getElementById('btn-check').addEventListener('click', checkAnswer);
+        document.getElementById('chk-reveal').addEventListener('change', toggleSolutionOverlay);
+
         window.addEventListener('resize', onWindowResize);
     });
 
@@ -289,7 +327,6 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         container.appendChild(renderer.domElement);
 
-        // Ambient & Directional Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         scene.add(ambientLight);
 
@@ -298,9 +335,7 @@
         scene.add(dirLight);
 
         modelGroup = new THREE.Group();
-        labelGroup = new THREE.Group();
         scene.add(modelGroup);
-        scene.add(labelGroup);
 
         resetView();
         animate();
@@ -311,11 +346,10 @@
         renderer.render(scene, camera);
     }
 
-    // --- Touch & Mouse Rotation Controls (Mobile & iPad Friendly) ---
+    // --- Interaction Events ---
     function setupTouchAndMouseEvents() {
         const container = document.getElementById('canvas-container');
 
-        // Helper to extract x/y from either Mouse or Touch
         const getCoord = (e) => {
             if (e.touches && e.touches.length > 0) {
                 return { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -340,16 +374,12 @@
             previousPosition = current;
         };
 
-        const stopDrag = () => {
-            isDragging = false;
-        };
+        const stopDrag = () => { isDragging = false; };
 
-        // Mouse listeners
         container.addEventListener('mousedown', startDrag);
         window.addEventListener('mousemove', moveDrag);
         window.addEventListener('mouseup', stopDrag);
 
-        // Touch listeners (iPad and Phone support)
         container.addEventListener('touchstart', startDrag, { passive: true });
         window.addEventListener('touchmove', moveDrag, { passive: true });
         window.addEventListener('touchend', stopDrag);
@@ -360,14 +390,10 @@
         modelGroup.rotation.y = defaultRotation.y;
     }
 
-    // --- Solid Block Generator (Contiguous Cluster) ---
+    // --- Solid Model Generator ---
     function generateNewSolidModel() {
-        // Clear previous meshes
         while(modelGroup.children.length > 0) { 
             modelGroup.remove(modelGroup.children[0]); 
-        }
-        while(labelGroup.children.length > 0) { 
-            labelGroup.remove(labelGroup.children[0]); 
         }
 
         activeBlocks = [];
@@ -377,7 +403,6 @@
             )
         );
 
-        // Seed initial base block
         let x = Math.floor(Math.random() * GRID_SIZE);
         let z = Math.floor(Math.random() * GRID_SIZE);
         let y = 0;
@@ -385,14 +410,9 @@
         grid[x][y][z] = true;
         activeBlocks.push({x, y, z, color: COLORS[Math.floor(Math.random() * COLORS.length)]});
 
-        const targetCount = Math.floor(Math.random() * 5) + 5; // 5 to 9 solid blocks
-        const dirs = [
-            [1,0,0], [-1,0,0], 
-            [0,1,0], [0,-1,0], 
-            [0,0,1], [0,0,-1]
-        ];
+        const targetCount = Math.floor(Math.random() * 5) + 5; // 5 to 9 blocks
+        const dirs = [[1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]];
 
-        // Grow contiguous solid shape
         while (activeBlocks.length < targetCount) {
             const base = activeBlocks[Math.floor(Math.random() * activeBlocks.length)];
             const dir = dirs[Math.floor(Math.random() * dirs.length)];
@@ -401,7 +421,6 @@
             const ny = base.y + dir[1];
             const nz = base.z + dir[2];
 
-            // Valid grid check with gravity rule (must sit on ground or another block)
             if (nx >= 0 && nx < GRID_SIZE &&
                 ny >= 0 && ny < GRID_SIZE &&
                 nz >= 0 && nz < GRID_SIZE &&
@@ -416,37 +435,31 @@
             }
         }
 
-        // Render 3D Cubes
         const offset = (GRID_SIZE - 1) / 2;
         const cubeGeo = new THREE.BoxGeometry(0.96, 0.96, 0.96);
 
         activeBlocks.forEach(b => {
-            const mat = new THREE.MeshStandardMaterial({ 
-                color: b.color, 
-                roughness: 0.3,
-                metalness: 0.1
-            });
+            const mat = new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.3, metalness: 0.1 });
             const cube = new THREE.Mesh(cubeGeo, mat);
-            
-            // Center the model in 3D space
             cube.position.set(b.x - offset, b.y - offset, b.z - offset);
             
-            // Add wireframe edge for clean CAD look
             const edges = new THREE.EdgesGeometry(cubeGeo);
-            const lineMat = new THREE.LineBasicMaterial({ color: 0x1a202c, linewidth: 1 });
-            const line = new THREE.LineSegments(edges, lineMat);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x1a202c }));
             cube.add(line);
 
             modelGroup.add(cube);
         });
 
         createCleanLabels();
+        calculateSolutions();
         clearGrids();
+        
+        // Reset Reveal Checkbox
+        document.getElementById('chk-reveal').checked = false;
     }
 
-    // --- Text Labels (Double Arrows Removed) ---
+    // --- Clean Viewport Direction Text ---
     function createCleanLabels() {
-        // Simple canvas sprite generator for clean text labels
         function makeTextSprite(message, colorHex) {
             const canvas = document.createElement('canvas');
             canvas.width = 256;
@@ -466,7 +479,6 @@
             return sprite;
         }
 
-        // CLEAN LABELS: Double arrows removed entirely
         const frontSprite = makeTextSprite("FRONT", "#2b6cb0");
         frontSprite.position.set(0, -1.8, 2.2);
 
@@ -481,24 +493,107 @@
         modelGroup.add(topSprite);
     }
 
+    // --- Orthographic Solution Logic ---
+    function calculateSolutions() {
+        // Create 3x3 boolean maps for projections
+        solutionProjections.top = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(false));
+        solutionProjections.front = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(false));
+        solutionProjections.right = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(false));
+
+        activeBlocks.forEach(b => {
+            // Top View: projected onto (x, z) - inverted z for standard top view orientation
+            solutionProjections.top[b.z][b.x] = true;
+            
+            // Front View: projected onto (x, y) - y inverted for grid row indexing (top row = high y)
+            solutionProjections.front[2 - b.y][b.x] = true;
+
+            // Right View: projected onto (z, y) - z from left to right, y top down
+            solutionProjections.right[2 - b.y][2 - b.z] = true;
+        });
+    }
+
     // --- Interactive 2D Grid Setup ---
     function setupOrthographicGrids() {
         ['top', 'front', 'right'].forEach(view => {
             const gridEl = document.getElementById(`grid-${view}`);
             gridEl.innerHTML = '';
-            for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'cell';
-                cell.addEventListener('click', () => {
-                    cell.classList.toggle('active');
-                });
-                gridEl.appendChild(cell);
+            for (let row = 0; row < GRID_SIZE; row++) {
+                for (let col = 0; col < GRID_SIZE; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    cell.dataset.view = view;
+                    cell.addEventListener('click', () => {
+                        cell.classList.toggle('active');
+                        // Remove status colors when user edits canvas
+                        cell.classList.remove('correct', 'incorrect', 'missed');
+                    });
+                    gridEl.appendChild(cell);
+                }
             }
         });
     }
 
     function clearGrids() {
-        document.querySelectorAll('.cell').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.cell').forEach(c => {
+            c.className = 'cell';
+        });
+        document.getElementById('chk-reveal').checked = false;
+    }
+
+    // --- Check Answer Functionality ---
+    function checkAnswer() {
+        let allCorrect = true;
+
+        ['top', 'front', 'right'].forEach(view => {
+            const gridCells = document.querySelectorAll(`#grid-${view} .cell`);
+            gridCells.forEach(cell => {
+                const r = parseInt(cell.dataset.row);
+                const c = parseInt(cell.dataset.col);
+                const isSelected = cell.classList.contains('active');
+                const shouldBeSelected = solutionProjections[view][r][c];
+
+                // Clear previous check classes
+                cell.classList.remove('correct', 'incorrect', 'missed');
+
+                if (isSelected && shouldBeSelected) {
+                    cell.classList.add('correct');
+                } else if (isSelected && !shouldBeSelected) {
+                    cell.classList.add('incorrect');
+                    allCorrect = false;
+                } else if (!isSelected && shouldBeSelected) {
+                    cell.classList.add('missed');
+                    allCorrect = false;
+                }
+            });
+        });
+
+        if (allCorrect) {
+            alert('🎉 Perfect! All views are completely correct.');
+        } else {
+            alert('❌ Not quite right yet!\n\n• Green = Correct\n• Red = Extra square\n• Light Red = Missed square');
+        }
+    }
+
+    // --- Reveal Solution Overlay Functionality ---
+    function toggleSolutionOverlay(e) {
+        const isChecked = e.target.checked;
+
+        ['top', 'front', 'right'].forEach(view => {
+            const gridCells = document.querySelectorAll(`#grid-${view} .cell`);
+            gridCells.forEach(cell => {
+                const r = parseInt(cell.dataset.row);
+                const c = parseInt(cell.dataset.col);
+                const isSolutionCell = solutionProjections[view][r][c];
+
+                if (isChecked && isSolutionCell) {
+                    cell.classList.add('solution-overlay');
+                } else {
+                    cell.classList.remove('solution-overlay');
+                }
+            });
+        });
     }
 
     function onWindowResize() {
