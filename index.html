@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CE 101: Orthographic Projection Practice</title>
+  <title>CE 101: 3D Block Orthographic Practice</title>
   <style>
     :root {
       --bg-color: #f1f5f9;
@@ -207,7 +207,7 @@
   <div class="panel">
     <div class="panel-title">Orthographic Drawing Workspace</div>
     <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-      Click grid cells to shade the projected faces. Check your work or reveal the solution overlay.
+      Click grid cells to shade the projected faces. Reveal solution overlay to view matching surface colors.
     </p>
     
     <canvas id="orthoCanvas" width="680" height="420"></canvas>
@@ -226,7 +226,6 @@
   let colorGrid = [];
   let studentGrid = {};
 
-  // Palette similar to structural modeling software
   const PALETTE = [
     '#e11d48', // Red
     '#ea580c', // Orange
@@ -234,7 +233,7 @@
     '#2563eb', // Royal Blue
     '#c026d3', // Magenta
     '#0891b2', // Cyan
-    '#d97706'  // Gold
+    '#d97706'  // Amber
   ];
 
   const isoCanvas = document.getElementById('isoCanvas');
@@ -290,8 +289,7 @@
       )
     );
 
-    // Procedurally build realistic civil engineering 3D composite blocks
-    // 1. Build ground footprint
+    // 1. Footprint layer (y = 0)
     for (let x = 0; x < GRID_SIZE; x++) {
       for (let z = 0; z < GRID_SIZE; z++) {
         if (Math.random() > 0.3) {
@@ -300,17 +298,19 @@
         }
       }
     }
-    // Ensure at least origin block exists
     grid[0][0][0] = true;
     if (!colorGrid[0][0][0]) colorGrid[0][0][0] = PALETTE[0];
 
-    // 2. Build upward columns with gravity support
+    // 2. Vertical columns with consistent block color assignment
     for (let y = 1; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         for (let z = 0; z < GRID_SIZE; z++) {
           if (grid[x][y - 1][z] && Math.random() > 0.45) {
             grid[x][y][z] = true;
-            colorGrid[x][y][z] = colorGrid[x][y - 1][z]; // Maintain block color up column
+            // High probability of distinct color for higher blocks
+            colorGrid[x][y][z] = (Math.random() > 0.4) 
+              ? PALETTE[Math.floor(Math.random() * PALETTE.length)] 
+              : colorGrid[x][y - 1][z];
           }
         }
       }
@@ -358,7 +358,7 @@
       isoCtx.stroke();
     }
 
-    // Draw blocks using Painter's Algorithm (back to front)
+    // Painter's algorithm: Y -> Z -> X
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let z = 0; z < GRID_SIZE; z++) {
         for (let x = 0; x < GRID_SIZE; x++) {
@@ -393,7 +393,7 @@
       }
     }
 
-    // Helper: Draw sightline arrows looking AT the block
+    // Arrow Drawing Helper
     function drawArrow(fromX, fromY, toX, toY, color, label) {
       const headlen = 10;
       const dx = toX - fromX;
@@ -424,7 +424,6 @@
       }
     }
 
-    // Sightline Arrows
     const [fx, fy] = isoProject(GRID_SIZE / 2, 0, GRID_SIZE);
     drawArrow(fx - 45, fy + 30, fx - 10, fy + 8, '#4f46e5', "FRONT ↗");
 
@@ -435,7 +434,7 @@
     drawArrow(tx, ty - 40, tx, ty - 10, '#d97706', "TOP ↓");
   }
 
-  // Calculate True Orthographic Projections
+  // Calculate True Orthographic Projections with EXACT Surface Color Mapping
   function getGroundTruth() {
     const truth = {
       front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
@@ -448,7 +447,8 @@
       }
     };
 
-    // 1. FRONT VIEW: u = x, v = GRID_SIZE - 1 - y (Ray along z)
+    // 1. FRONT VIEW: u = x (Left-to-Right), v = GRID_SIZE - 1 - y (Top-to-Bottom)
+    // Ray shoots from Front (z = GRID_SIZE - 1) toward Back (z = 0)
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const x = u;
@@ -463,7 +463,8 @@
       }
     }
 
-    // 2. TOP VIEW: u = x, v = z (Ray along y)
+    // 2. TOP VIEW: u = x (Left-to-Right), v = z (Top-to-Bottom: Back z=0 is Top, Front z=GRID_SIZE-1 is Bottom)
+    // Ray shoots from Top (y = GRID_SIZE - 1) down to Bottom (y = 0)
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const x = u;
@@ -478,10 +479,15 @@
       }
     }
 
-    // 3. RIGHT SIDE VIEW: u = z, v = GRID_SIZE - 1 - y (Ray along x)
+    // 3. RIGHT SIDE VIEW: 
+    // Looking in direction ↖ (-X axis). 
+    // Left side of view (u=0) corresponds to FRONT of object (z = GRID_SIZE - 1).
+    // Right side of view (u=GRID_SIZE-1) corresponds to BACK of object (z = 0).
+    // u = (GRID_SIZE - 1) - z, v = GRID_SIZE - 1 - y
+    // Ray shoots from Right (x = GRID_SIZE - 1) to Left (x = 0)
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
-        const z = u;
+        const z = (GRID_SIZE - 1) - u; 
         const y = GRID_SIZE - 1 - v;
         for (let x = GRID_SIZE - 1; x >= 0; x--) {
           if (grid[x][y][z]) {
@@ -509,7 +515,7 @@
     };
   }
 
-  // Draw 2D Orthographic Canvas
+  // Render 2D Orthographic Canvas
   function drawOrthographic() {
     orthoCtx.clearRect(0, 0, 680, 420);
     const layout = getOrthoLayout();
@@ -525,7 +531,7 @@
     views.forEach(v => {
       const { x: ox, y: oy } = v.origin;
 
-      // Draw Grid Lines
+      // Grid Lines
       orthoCtx.strokeStyle = '#cbd5e1';
       orthoCtx.lineWidth = 1;
       for (let i = 0; i <= GRID_SIZE; i++) {
@@ -545,7 +551,7 @@
       orthoCtx.fillStyle = "#475569";
       orthoCtx.fillText(v.name, ox, oy - 10);
 
-      // Render Student Input
+      // Student Input Shading
       for (let u = 0; u < GRID_SIZE; u++) {
         for (let vIdx = 0; vIdx < GRID_SIZE; vIdx++) {
           const cx = ox + u * layout.cellSize;
@@ -558,7 +564,7 @@
         }
       }
 
-      // Render Solution Overlay
+      // Solution Overlay with True Color Matching
       if (showSolution) {
         for (let u = 0; u < GRID_SIZE; u++) {
           for (let vIdx = 0; vIdx < GRID_SIZE; vIdx++) {
@@ -580,11 +586,11 @@
       }
     });
 
-    // Projection Alignment Lines
+    // Standard Alignment Guidelines
     orthoCtx.strokeStyle = '#94a3b8';
     orthoCtx.setLineDash([3, 3]);
     
-    // Vertical Alignment (Top -> Front)
+    // Top -> Front Vertical Projection
     for (let i = 0; i <= GRID_SIZE; i++) {
       const x = layout.top.x + i * layout.cellSize;
       orthoCtx.beginPath();
@@ -593,7 +599,7 @@
       orthoCtx.stroke();
     }
 
-    // Horizontal Alignment (Front -> Right)
+    // Front -> Right Horizontal Projection
     for (let i = 0; i <= GRID_SIZE; i++) {
       const y = layout.front.y + i * layout.cellSize;
       orthoCtx.beginPath();
@@ -604,7 +610,7 @@
     orthoCtx.setLineDash([]);
   }
 
-  // Interactive Click Listener
+  // Click Interaction
   orthoCanvas.addEventListener('click', (e) => {
     const rect = orthoCanvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
@@ -629,7 +635,7 @@
     });
   });
 
-  // Grading Function
+  // Automated Checker
   function checkAnswer() {
     const truth = getGroundTruth();
     let totalCells = GRID_SIZE * GRID_SIZE * 3;
@@ -648,10 +654,10 @@
     const percent = Math.round((correctCells / totalCells) * 100);
     if (percent === 100) {
       statusBar.className = "status-bar success";
-      statusBar.textContent = "🎉 Excellent! All views match the 3D model standard projection perfectly.";
+      statusBar.textContent = "🎉 Perfect score! All projected faces and sightlines align correctly.";
     } else {
       statusBar.className = "status-bar error";
-      statusBar.textContent = `Score: ${percent}%. Check your shaded faces or reveal the solution overlay.`;
+      statusBar.textContent = `Score: ${percent}%. Toggle 'Reveal Solution Overlay' to examine the exact spatial colors.`;
     }
   }
 
