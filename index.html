@@ -1,273 +1,594 @@
-<html>
-<body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orthographic Projection Student Practice</title>
+  <style>
+    :root {
+      --bg-color: #f8fafc;
+      --card-bg: #ffffff;
+      --border-color: #e2e8f0;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --success: #10b981;
+      --danger: #ef4444;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+    }
 
-<script>
-  const GRID_SIZE = 3;
-  let grid = Array(GRID_SIZE).fill().map(() =>
-    Array(GRID_SIZE).fill().map(() =>
-      Array(GRID_SIZE).fill(false)
-    )
-  );
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
 
-  const isoCanvas = document.getElementById('isoCanvas');
-  const isoCtx = isoCanvas.getContext('2d');
-  const orthoCanvas = document.getElementById('orthoCanvas');
-  const orthoCtx = orthoCanvas.getContext('2d');
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      padding: 20px;
+    }
 
-  const chkFront = document.getElementById('chkFront');
-  const chkTop = document.getElementById('chkTop');
-  const chkRight = document.getElementById('chkRight');
-  const chkHidden = document.getElementById('chkHidden');
+    header {
+      max-width: 1200px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: var(--card-bg);
+      padding: 16px 24px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
 
-  function generateShape() {
-    for (let x = 0; x < GRID_SIZE; x++)
-      for (let y = 0; y < GRID_SIZE; y++)
-        for (let z = 0; z < GRID_SIZE; z++)
-          grid[x][y][z] = false;
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
 
-    for (let x = 0; x < GRID_SIZE; x++) {
-      for (let z = 0; z < GRID_SIZE; z++) {
-        if (Math.random() > 0.3) grid[x][0][z] = true;
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: var(--primary-hover);
+    }
+
+    button.btn-outline {
+      background-color: transparent;
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+
+    button.btn-outline:hover {
+      background-color: #f1f5f9;
+    }
+
+    button.btn-success {
+      background-color: var(--success);
+    }
+
+    button.btn-success:hover {
+      background-color: #059669;
+    }
+
+    select, label {
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    select {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: white;
+      cursor: pointer;
+    }
+
+    .main-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .main-container {
+        grid-template-columns: 1fr;
       }
     }
-    grid[0][0][0] = true;
 
+    .panel {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .panel-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    canvas {
+      display: block;
+      background: #ffffff;
+      border-radius: 8px;
+    }
+
+    .status-bar {
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .status-bar.success {
+      background-color: #d1fae5;
+      color: #065f46;
+      display: block;
+    }
+
+    .status-bar.error {
+      background-color: #fee2e2;
+      color: #991b1b;
+      display: block;
+    }
+
+    .checkbox-group {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .checkbox-group label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Orthographic Projection Practice</h1>
+  <div class="controls">
+    <label for="sizeSelect">Grid Size:</label>
+    <select id="sizeSelect">
+      <option value="2">2 x 2 x 2</option>
+      <option value="3" selected>3 x 3 x 3</option>
+    </select>
+    <button id="btnNew">New Model</button>
+    <button id="btnClear" class="btn-outline">Clear Student Work</button>
+    <button id="btnCheck" class="btn-success">Check Answer</button>
+  </div>
+</header>
+
+<div class="main-container">
+  <!-- Left Panel: 3D Isometric View -->
+  <div class="panel">
+    <div class="panel-title">3D Solid Model (Isometric)</div>
+    <canvas id="isoCanvas" width="380" height="420"></canvas>
+    <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 8px;">
+      Observe the colored arrows to identify Front, Right, and Top viewing angles.
+    </p>
+  </div>
+
+  <!-- Right Panel: Student Orthographic Workspace -->
+  <div class="panel">
+    <div class="panel-title">Orthographic Drawing Workspace</div>
+    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+      <strong>Instruction:</strong> Click grid squares to draw filled faces. Toggle solution to reveal answers or hidden lines.
+    </p>
+    
+    <canvas id="orthoCanvas" width="680" height="420"></canvas>
+
+    <div class="checkbox-group">
+      <label><input type="checkbox" id="chkSolution" /> Reveal Solution Overlay</label>
+      <label><input type="checkbox" id="chkHidden" /> Show Hidden Lines</label>
+    </div>
+
+    <div id="statusBar" class="status-bar"></div>
+  </div>
+</div>
+
+<script>
+  let GRID_SIZE = 3;
+  let grid = [];
+  
+  // Student user-drawn grid answers: { front: [u][v], top: [u][v], right: [u][v] }
+  let studentGrid = {};
+
+  const isoCanvas = document.getElementById('isoCanvas');
+  const orthoCanvas = document.getElementById('orthoCanvas');
+  const sizeSelect = document.getElementById('sizeSelect');
+  const chkSolution = document.getElementById('chkSolution');
+  const chkHidden = document.getElementById('chkHidden');
+  const statusBar = document.getElementById('statusBar');
+
+  // Set up crisp HiDPI canvas rendering
+  function setupHiDPI(canvas, width, height) {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+  }
+
+  const isoCtx = setupHiDPI(isoCanvas, 380, 420);
+  const orthoCtx = setupHiDPI(orthoCanvas, 680, 420);
+
+  // Initialize empty student grid arrays
+  function resetStudentGrid() {
+    studentGrid = {
+      front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
+      top: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
+      right: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false))
+    };
+  }
+
+  // Generate a realistic, continuous shape with gravity constraints
+  function generateShape() {
+    GRID_SIZE = parseInt(sizeSelect.value, 10);
+    resetStudentGrid();
+    statusBar.style.display = 'none';
+
+    grid = Array.from({ length: GRID_SIZE }, () =>
+      Array.from({ length: GRID_SIZE }, () =>
+        Array(GRID_SIZE).fill(false)
+      )
+    );
+
+    // Ground layer seed
+    for (let x = 0; x < GRID_SIZE; x++) {
+      for (let z = 0; z < GRID_SIZE; z++) {
+        if (Math.random() > 0.35) grid[x][0][z] = true;
+      }
+    }
+    grid[0][0][0] = true; // Ensure at least one block
+
+    // Stacking blocks on top (gravity support)
     for (let y = 1; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         for (let z = 0; z < GRID_SIZE; z++) {
-          if (grid[x][y - 1][z] && Math.random() > 0.5) grid[x][y][z] = true;
-        }
-      }
-    }
-    renderAll();
-  }
-
-  function drawIsometric() {
-    isoCtx.clearRect(0, 0, isoCanvas.width, isoCanvas.height);
-
-    const cubeWidth = 40;
-    const cubeHeight = 40;
-    const ang = Math.PI / 6;
-    const cos = Math.cos(ang), sin = Math.sin(ang);
-
-    function isoProject(x, y, z, originX, originY) {
-      return [
-        originX + (x - z) * (cubeWidth * cos),
-        originY - y * cubeHeight + (x + z) * (cubeWidth * sin)
-      ];
-    }
-
-    // compute bounds for centering
-    let minX = Infinity, minY = Infinity;
-    let maxX = -Infinity, maxY = -Infinity;
-
-    // temporary origin 0 for bounds
-    for (let x = 0; x <= GRID_SIZE; x++) {
-      for (let y = 0; y <= GRID_SIZE; y++) {
-        for (let z = 0; z <= GRID_SIZE; z++) {
-          const [px, py] = isoProject(x, y, z, 0, 0);
-          minX = Math.min(minX, px);
-          minY = Math.min(minY, py);
-          maxX = Math.max(maxX, px);
-          maxY = Math.max(maxY, py);
-        }
-      }
-    }
-
-    const pad = 30;
-    const contentW = (maxX - minX);
-    const contentH = (maxY - minY);
-
-    const originX = (isoCanvas.width - contentW) / 2 - minX + pad * 0.1;
-    const originY = (isoCanvas.height - contentH) / 2 - minY + pad * 0.2;
-
-    // painter's algorithm
-    for (let y = 0; y < GRID_SIZE; y++) {
-      for (let z = GRID_SIZE - 1; z >= 0; z--) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-          if (!grid[x][y][z]) continue;
-          drawIsoCube(isoCtx, x, y, z, (cx, cy, cz) => isoProject(cx, cy, cz, originX, originY), 40);
-        }
-      }
-    }
-
-    // axes text
-    isoCtx.font = "bold 12px sans-serif";
-    isoCtx.fillStyle = "#0284c7";
-    const [ax, ay] = isoProject(3, 0, 0, originX, originY);
-    isoCtx.fillText("FRONT →", ax - 35, ay + 18);
-  }
-
-  function drawIsoCube(ctx, x, y, z, project) {
-    const topColor = '#ffffff';
-    const leftColor = '#e2e8f0';
-    const rightColor = '#cbd5e1';
-    const strokeColor = '#0f172a';
-
-    const p0 = project(x, y, z);
-    const p1 = project(x + 1, y, z);
-    const p2 = project(x + 1, y + 1, z);
-    const p3 = project(x, y + 1, z);
-
-    const p4 = project(x, y, z + 1);
-    const p5 = project(x + 1, y, z + 1);
-    const p6 = project(x + 1, y + 1, z + 1);
-    const p7 = project(x, y + 1, z + 1);
-
-    // Top
-    ctx.beginPath();
-    ctx.moveTo(p3[0], p3[1]); ctx.lineTo(p2[0], p2[1]);
-    ctx.lineTo(p6[0], p6[1]); ctx.lineTo(p7[0], p7[1]);
-    ctx.closePath();
-    ctx.fillStyle = topColor; ctx.fill();
-    ctx.strokeStyle = strokeColor; ctx.lineWidth = 1.2; ctx.stroke();
-
-    // Left
-    ctx.beginPath();
-    ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]);
-    ctx.lineTo(p2[0], p2[1]); ctx.lineTo(p3[0], p3[1]);
-    ctx.closePath();
-    ctx.fillStyle = leftColor; ctx.fill();
-    ctx.strokeStyle = strokeColor; ctx.lineWidth = 1.2; ctx.stroke();
-
-    // Right
-    ctx.beginPath();
-    ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p5[0], p5[1]);
-    ctx.lineTo(p6[0], p6[1]); ctx.lineTo(p2[0], p2[1]);
-    ctx.closePath();
-    ctx.fillStyle = rightColor; ctx.fill();
-    ctx.strokeStyle = strokeColor; ctx.lineWidth = 1.2; ctx.stroke();
-  }
-
-  function drawGridFrame(ctx, ox, oy, size, title) {
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= GRID_SIZE; i++) {
-      ctx.beginPath();
-      ctx.moveTo(ox + i * size, oy);
-      ctx.lineTo(ox + i * size, oy + GRID_SIZE * size);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(ox, oy + i * size);
-      ctx.lineTo(ox + GRID_SIZE * size, oy + i * size);
-      ctx.stroke();
-    }
-    ctx.font = "bold 11px sans-serif";
-    ctx.fillStyle = "#64748b";
-    ctx.fillText(title, ox, oy - 8);
-  }
-
-  function drawOrthoProjectionSolidFaces(ctx, ox, oy, size, viewType, showHidden) {
-    // Instead of face-filling arbitrary squares, we draw the 3 visible faces edges per visible voxel
-    // using a simple visibility test: front-most in that view's depth direction per (u,v).
-    const cubeFill = 'rgba(2, 132, 199, 0.12)';
-    const solidStroke = '#09090b';
-    const hiddenStroke = '#ef4444';
-
-    function map3DToUVDepth(x, y, z) {
-      if (viewType === 'front') {
-        return { u: x, v: (GRID_SIZE - 1 - y), d: z };
-      } else if (viewType === 'top') {
-        return { u: x, v: (GRID_SIZE - 1 - z), d: y };
-      } else { // right
-        return { u: (GRID_SIZE - 1 - z), v: (GRID_SIZE - 1 - y), d: x };
-      }
-    }
-
-    const frontDepth = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(Infinity));
-    for (let x = 0; x < GRID_SIZE; x++) {
-      for (let y = 0; y < GRID_SIZE; y++) {
-        for (let z = 0; z < GRID_SIZE; z++) {
-          if (!grid[x][y][z]) continue;
-          const m = map3DToUVDepth(x, y, z);
-          if (m.d < frontDepth[m.u][m.v]) frontDepth[m.u][m.v] = m.d;
-        }
-      }
-    }
-
-    function cellXY(u, v) {
-      return { x: ox + u * size, y: oy + v * size };
-    }
-
-    // draw cubes far-to-near
-    for (let d = GRID_SIZE - 1; d >= 0; d--) {
-      for (let x = 0; x < GRID_SIZE; x++) {
-        for (let y = 0; y < GRID_SIZE; y++) {
-          for (let z = 0; z < GRID_SIZE; z++) {
-            if (!grid[x][y][z]) continue;
-            const m = map3DToUVDepth(x, y, z);
-            if (m.d !== d) continue;
-
-            const isHidden = (m.d !== frontDepth[m.u][m.v]);
-
-            const { x: cx, y: cy } = cellXY(m.u, m.v);
-            if (!isHidden || showHidden) {
-              ctx.fillStyle = cubeFill;
-              ctx.fillRect(cx, cy, size, size);
-            }
-
-            // visible block outline + "solid face" effect: solid fill with one outline per voxel
-            if (isHidden) {
-              if (!showHidden) continue;
-              ctx.strokeStyle = hiddenStroke;
-              ctx.setLineDash([5, 4]);
-            } else {
-              ctx.strokeStyle = solidStroke;
-              ctx.setLineDash([]);
-            }
-            ctx.lineWidth = 2;
-            ctx.strokeRect(cx, cy, size, size);
+          if (grid[x][y - 1][z] && Math.random() > 0.45) {
+            grid[x][y][z] = true;
           }
         }
       }
     }
-    ctx.setLineDash([]);
+
+    renderAll();
   }
 
+  // Draw 3D Isometric View
+  function drawIsometric() {
+    isoCtx.clearRect(0, 0, 380, 420);
+
+    const cubeW = GRID_SIZE === 2 ? 55 : 42;
+    const cubeH = cubeW;
+    const ang = Math.PI / 6; // 30 degrees
+    const cos = Math.cos(ang);
+    const sin = Math.sin(ang);
+
+    const originX = 190;
+    const originY = 240;
+
+    function isoProject(x, y, z) {
+      return [
+        originX + (x - z) * (cubeW * cos),
+        originY - y * cubeH + (x + z) * (cubeW * sin)
+      ];
+    }
+
+    // Painter's algorithm: draw back-to-front
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let z = 0; z < GRID_SIZE; z++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          if (!grid[x][y][z]) continue;
+
+          const p0 = isoProject(x, y, z);
+          const p1 = isoProject(x + 1, y, z);
+          const p2 = isoProject(x + 1, y + 1, z);
+          const p3 = isoProject(x, y + 1, z);
+          const p4 = isoProject(x, y, z + 1);
+          const p5 = isoProject(x + 1, y, z + 1);
+          const p6 = isoProject(x + 1, y + 1, z + 1);
+          const p7 = isoProject(x, y + 1, z + 1);
+
+          // Top face
+          isoCtx.beginPath();
+          isoCtx.moveTo(p3[0], p3[1]); isoCtx.lineTo(p2[0], p2[1]);
+          isoCtx.lineTo(p6[0], p6[1]); isoCtx.lineTo(p7[0], p7[1]);
+          isoCtx.closePath();
+          isoCtx.fillStyle = '#f8fafc'; isoCtx.fill();
+          isoCtx.strokeStyle = '#0f172a'; isoCtx.lineWidth = 1.5; isoCtx.stroke();
+
+          // Left face (facing Front)
+          isoCtx.beginPath();
+          isoCtx.moveTo(p4[0], p4[1]); isoCtx.lineTo(p5[0], p5[1]);
+          isoCtx.lineTo(p6[0], p6[1]); isoCtx.lineTo(p7[0], p7[1]);
+          // Wait, Left face vertices: (x, y, z+1) to (x+1, y, z+1) etc.
+          isoCtx.moveTo(p0[0], p0[1]); isoCtx.lineTo(p4[0], p4[1]);
+          isoCtx.lineTo(p7[0], p7[1]); isoCtx.lineTo(p3[0], p3[1]);
+          isoCtx.closePath();
+          isoCtx.fillStyle = '#cbd5e1'; isoCtx.fill();
+          isoCtx.strokeStyle = '#0f172a'; isoCtx.lineWidth = 1.5; isoCtx.stroke();
+
+          // Right face (facing Right side)
+          isoCtx.beginPath();
+          isoCtx.moveTo(p0[0], p0[1]); isoCtx.lineTo(p1[0], p1[1]);
+          isoCtx.lineTo(p2[0], p2[1]); isoCtx.lineTo(p3[0], p3[1]);
+          isoCtx.moveTo(p4[0], p4[1]); isoCtx.lineTo(p5[0], p5[1]);
+          isoCtx.lineTo(p6[0], p6[1]); isoCtx.lineTo(p7[0], p7[1]);
+          // Correct right face quad:
+          isoCtx.moveTo(p1[0], p1[1]); isoCtx.lineTo(p5[0], p5[1]);
+          isoCtx.lineTo(p6[0], p6[1]); isoCtx.lineTo(p2[0], p2[1]);
+          isoCtx.closePath();
+          isoCtx.fillStyle = '#94a3b8'; isoCtx.fill();
+          isoCtx.strokeStyle = '#0f172a'; isoCtx.lineWidth = 1.5; isoCtx.stroke();
+        }
+      }
+    }
+
+    // Directional labels and arrows
+    isoCtx.font = "bold 12px sans-serif";
+    
+    // Front Arrow (pointing down-right towards front face)
+    const [fx, fy] = isoProject(0, 0, GRID_SIZE);
+    isoCtx.fillStyle = '#6366f1';
+    isoCtx.fillText("FRONT ↙", fx - 65, fy + 20);
+
+    // Right Arrow (pointing down-left towards right face)
+    const [rx, ry] = isoProject(GRID_SIZE, 0, 0);
+    isoCtx.fillStyle = '#059669';
+    isoCtx.fillText("↘ RIGHT", rx + 10, ry + 20);
+
+    // Top Arrow
+    const [tx, ty] = isoProject(0, GRID_SIZE, 0);
+    isoCtx.fillStyle = '#d97706';
+    isoCtx.fillText("TOP ↓", tx - 18, ty - 15);
+  }
+
+  // Calculate True Depth Maps for Ground Truth
+  function getGroundTruth() {
+    const truth = {
+      front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(Infinity)),
+      top: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(Infinity)),
+      right: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(Infinity))
+    };
+
+    for (let x = 0; x < GRID_SIZE; x++) {
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let z = 0; z < GRID_SIZE; z++) {
+          if (!grid[x][y][z]) continue;
+
+          // Front View: u=x, v=(GRID_SIZE-1-y), depth=z
+          const fu = x, fv = GRID_SIZE - 1 - y;
+          if (z < truth.front[fu][fv]) truth.front[fu][fv] = z;
+
+          // Top View: u=x, v=(GRID_SIZE-1-z), depth=(GRID_SIZE-1-y)
+          const tu = x, tv = GRID_SIZE - 1 - z;
+          const td = GRID_SIZE - 1 - y;
+          if (td < truth.top[tu][tv]) truth.top[tu][tv] = td;
+
+          // Right View: u=z, v=(GRID_SIZE-1-y), depth=(GRID_SIZE-1-x)
+          const ru = z, rv = GRID_SIZE - 1 - y;
+          const rd = GRID_SIZE - 1 - x;
+          if (rd < truth.right[ru][rv]) truth.right[ru][rv] = rd;
+        }
+      }
+    }
+    return truth;
+  }
+
+  // Layout parameters for Orthographic view grids
+  function getOrthoLayout() {
+    const cellSize = GRID_SIZE === 2 ? 50 : 40;
+    const gridDim = GRID_SIZE * cellSize;
+
+    return {
+      cellSize,
+      gridDim,
+      top: { x: 90, y: 30 },
+      front: { x: 90, y: 30 + gridDim + 50 },
+      right: { x: 90 + gridDim + 70, y: 30 + gridDim + 50 }
+    };
+  }
+
+  // Draw 2D Orthographic Canvas
   function drawOrthographic() {
-    orthoCtx.clearRect(0, 0, orthoCanvas.width, orthoCanvas.height);
-    const cellSize = 30;
-
-    const topOrigin = { x: 80, y: 30 };
-    const frontOrigin = { x: 80, y: 180 };
-    const rightOrigin = { x: 280, y: 180 };
-
+    orthoCtx.clearRect(0, 0, 680, 420);
+    const layout = getOrthoLayout();
+    const truth = getGroundTruth();
+    const showSolution = chkSolution.checked;
     const showHidden = chkHidden.checked;
 
-    if (chkTop.checked) {
-      drawGridFrame(orthoCtx, topOrigin.x, topOrigin.y, cellSize, "TOP VIEW");
-      drawOrthoProjectionSolidFaces(orthoCtx, topOrigin.x, topOrigin.y, cellSize, 'top', showHidden);
-    }
-    if (chkFront.checked) {
-      drawGridFrame(orthoCtx, frontOrigin.x, frontOrigin.y, cellSize, "FRONT VIEW");
-      drawOrthoProjectionSolidFaces(orthoCtx, frontOrigin.x, frontOrigin.y, cellSize, 'front', showHidden);
-    }
-    if (chkRight.checked) {
-      drawGridFrame(orthoCtx, rightOrigin.x, rightOrigin.y, cellSize, "RIGHT SIDE VIEW");
-      drawOrthoProjectionSolidFaces(orthoCtx, rightOrigin.x, rightOrigin.y, cellSize, 'right', showHidden);
+    const views = [
+      { name: 'TOP VIEW', key: 'top', origin: layout.top },
+      { name: 'FRONT VIEW', key: 'front', origin: layout.front },
+      { name: 'RIGHT SIDE VIEW', key: 'right', origin: layout.right }
+    ];
+
+    views.forEach(v => {
+      const { x: ox, y: oy } = v.origin;
+
+      // Draw Grid Frame
+      orthoCtx.strokeStyle = '#cbd5e1';
+      orthoCtx.lineWidth = 1;
+      for (let i = 0; i <= GRID_SIZE; i++) {
+        orthoCtx.beginPath();
+        orthoCtx.moveTo(ox + i * layout.cellSize, oy);
+        orthoCtx.lineTo(ox + i * layout.cellSize, oy + layout.gridDim);
+        orthoCtx.stroke();
+
+        orthoCtx.beginPath();
+        orthoCtx.moveTo(ox, oy + i * layout.cellSize);
+        orthoCtx.lineTo(ox + layout.gridDim, oy + i * layout.cellSize);
+        orthoCtx.stroke();
+      }
+
+      // Title
+      orthoCtx.font = "bold 12px sans-serif";
+      orthoCtx.fillStyle = "#475569";
+      orthoCtx.fillText(v.name, ox, oy - 10);
+
+      // Render Student-drawn Blocks
+      for (let u = 0; u < GRID_SIZE; u++) {
+        for (let vIdx = 0; vIdx < GRID_SIZE; vIdx++) {
+          const cx = ox + u * layout.cellSize;
+          const cy = oy + vIdx * layout.cellSize;
+
+          if (studentGrid[v.key][u][vIdx]) {
+            orthoCtx.fillStyle = '#6366f1';
+            orthoCtx.fillRect(cx + 2, cy + 2, layout.cellSize - 4, layout.cellSize - 4);
+          }
+        }
+      }
+
+      // Render Solution Overlay if enabled
+      if (showSolution) {
+        for (let u = 0; u < GRID_SIZE; u++) {
+          for (let vIdx = 0; vIdx < GRID_SIZE; vIdx++) {
+            const cx = ox + u * layout.cellSize;
+            const cy = oy + vIdx * layout.cellSize;
+            const isFilled = truth[v.key][u][vIdx] < Infinity;
+
+            if (isFilled) {
+              orthoCtx.strokeStyle = '#10b981';
+              orthoCtx.lineWidth = 3;
+              orthoCtx.strokeRect(cx + 1, cy + 1, layout.cellSize - 2, layout.cellSize - 2);
+            }
+
+            // Hidden lines rendering
+            if (showHidden) {
+              // Check if any block exists behind the frontmost face
+              let hasHiddenFeature = false;
+              for (let d = 1; d < GRID_SIZE; d++) {
+                if (v.key === 'front' && grid[u][GRID_SIZE - 1 - vIdx][d]) hasHiddenFeature = true;
+                if (v.key === 'top' && grid[u][GRID_SIZE - 1 - d][GRID_SIZE - 1 - vIdx]) hasHiddenFeature = true;
+                if (v.key === 'right' && grid[GRID_SIZE - 1 - d][GRID_SIZE - 1 - vIdx][u]) hasHiddenFeature = true;
+              }
+
+              if (!isFilled && hasHiddenFeature) {
+                orthoCtx.strokeStyle = '#ef4444';
+                orthoCtx.setLineDash([4, 3]);
+                orthoCtx.lineWidth = 2;
+                orthoCtx.strokeRect(cx + 4, cy + 4, layout.cellSize - 8, layout.cellSize - 8);
+                orthoCtx.setLineDash([]);
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Draw Projection Alignment Dashed Lines
+    orthoCtx.strokeStyle = '#94a3b8';
+    orthoCtx.setLineDash([3, 3]);
+    
+    // Vertical alignment (Top -> Front)
+    for (let i = 0; i <= GRID_SIZE; i++) {
+      const x = layout.top.x + i * layout.cellSize;
+      orthoCtx.beginPath();
+      orthoCtx.moveTo(x, layout.top.y + layout.gridDim);
+      orthoCtx.lineTo(x, layout.front.y);
+      orthoCtx.stroke();
     }
 
-    // alignment dashed lines
-    orthoCtx.strokeStyle = '#e2e8f0';
-    orthoCtx.setLineDash([2, 4]);
-    if (chkTop.checked && chkFront.checked) {
-      for (let i = 0; i <= 3; i++) {
-        orthoCtx.beginPath();
-        orthoCtx.moveTo(topOrigin.x + i * cellSize, topOrigin.y + 3 * cellSize);
-        orthoCtx.lineTo(frontOrigin.x + i * cellSize, frontOrigin.y);
-        orthoCtx.stroke();
-      }
-    }
-    if (chkFront.checked && chkRight.checked) {
-      for (let i = 0; i <= 3; i++) {
-        orthoCtx.beginPath();
-        orthoCtx.moveTo(frontOrigin.x + 3 * cellSize, frontOrigin.y + i * cellSize);
-        orthoCtx.lineTo(rightOrigin.x, rightOrigin.y + i * cellSize);
-        orthoCtx.stroke();
-      }
+    // Horizontal alignment (Front -> Right)
+    for (let i = 0; i <= GRID_SIZE; i++) {
+      const y = layout.front.y + i * layout.cellSize;
+      orthoCtx.beginPath();
+      orthoCtx.moveTo(layout.front.x + layout.gridDim, y);
+      orthoCtx.lineTo(layout.right.x, y);
+      orthoCtx.stroke();
     }
     orthoCtx.setLineDash([]);
+  }
+
+  // Handle Mouse Clicks on Orthographic Canvas to Draw/Toggle Squares
+  orthoCanvas.addEventListener('click', (e) => {
+    const rect = orthoCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const layout = getOrthoLayout();
+    const views = [
+      { key: 'top', origin: layout.top },
+      { key: 'front', origin: layout.front },
+      { key: 'right', origin: layout.right }
+    ];
+
+    views.forEach(v => {
+      const { x: ox, y: oy } = v.origin;
+      if (mx >= ox && mx < ox + layout.gridDim && my >= oy && my < oy + layout.gridDim) {
+        const u = Math.floor((mx - ox) / layout.cellSize);
+        const vIdx = Math.floor((my - oy) / layout.cellSize);
+
+        studentGrid[v.key][u][vIdx] = !studentGrid[v.key][u][vIdx];
+        drawOrthographic();
+      }
+    });
+  });
+
+  // Check Student Answers
+  function checkAnswer() {
+    const truth = getGroundTruth();
+    let totalCells = GRID_SIZE * GRID_SIZE * 3;
+    let correctCells = 0;
+
+    ['front', 'top', 'right'].forEach(key => {
+      for (let u = 0; u < GRID_SIZE; u++) {
+        for (let v = 0; v < GRID_SIZE; v++) {
+          const expected = truth[key][u][v] < Infinity;
+          const actual = studentGrid[key][u][v];
+          if (expected === actual) correctCells++;
+        }
+      }
+    });
+
+    const percent = Math.round((correctCells / totalCells) * 100);
+    if (percent === 100) {
+      statusBar.className = "status-bar success";
+      statusBar.textContent = "🎉 Excellent! All orthographic projections are 100% correct!";
+    } else {
+      statusBar.className = "status-bar error";
+      statusBar.textContent = `Score: ${percent}%. Keep trying! Toggle 'Reveal Solution Overlay' to check mistakes.`;
+    }
   }
 
   function renderAll() {
@@ -275,16 +596,19 @@
     drawOrthographic();
   }
 
+  // Event Listeners
   document.getElementById('btnNew').addEventListener('click', generateShape);
-  document.getElementById('btnReset').addEventListener('click', () => {
-    chkFront.checked = false;
-    chkTop.checked = false;
-    chkRight.checked = false;
+  document.getElementById('btnClear').addEventListener('click', () => {
+    resetStudentGrid();
+    statusBar.style.display = 'none';
     drawOrthographic();
   });
+  document.getElementById('btnCheck').addEventListener('click', checkAnswer);
+  sizeSelect.addEventListener('change', generateShape);
+  chkSolution.addEventListener('change', drawOrthographic);
+  chkHidden.addEventListener('change', drawOrthographic);
 
-  [chkFront, chkTop, chkRight, chkHidden].forEach(el => el.addEventListener('change', drawOrthographic));
-
+  // Initial setup
   generateShape();
 </script>
 </body>
