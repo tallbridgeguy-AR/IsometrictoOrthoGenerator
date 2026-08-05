@@ -1,508 +1,401 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Engineering Graphics: Isometric to Orthographic Generator</title>
-  <style>
-    :root {
-      --bg-color: #f8fafc;
-      --panel-bg: #ffffff;
-      --border-color: #cbd5e1;
-      --text-color: #0f172a;
-      --primary-color: #0284c7;
-      --primary-hover: #0369a1;
-      --line-visible: #09090b;
-      --line-hidden: #ef4444;
-      --grid-color: #e2e8f0;
-    }
+<script>
+  // Grid dimensions: 3x3x3 grid of voxel cubes
+  const GRID_SIZE = 3;
+  let grid = Array(GRID_SIZE).fill().map(() =>
+    Array(GRID_SIZE).fill().map(() =>
+      Array(GRID_SIZE).fill(false)
+    )
+  );
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
+  // Canvas contexts
+  const isoCanvas = document.getElementById('isoCanvas');
+  const isoCtx = isoCanvas.getContext('2d');
+  const orthoCanvas = document.getElementById('orthoCanvas');
+  const orthoCtx = orthoCanvas.getContext('2d');
 
-    body {
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-    }
+  // UI elements
+  const chkFront = document.getElementById('chkFront');
+  const chkTop = document.getElementById('chkTop');
+  const chkRight = document.getElementById('chkRight');
+  const chkHidden = document.getElementById('chkHidden');
 
-    header {
-      width: 100%;
-      max-width: 1100px;
-      margin-bottom: 20px;
-    }
+  function generateShape() {
+    // Clear grid
+    for (let x = 0; x < GRID_SIZE; x++)
+      for (let y = 0; y < GRID_SIZE; y++)
+        for (let z = 0; z < GRID_SIZE; z++)
+          grid[x][y][z] = false;
 
-    h1 {
-      font-size: 1.5rem;
-      margin-bottom: 4px;
-    }
-
-    p.subtitle {
-      color: #64748b;
-      font-size: 0.95rem;
-    }
-
-    .main-layout {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      width: 100%;
-      max-width: 1100px;
-    }
-
-    @media (max-width: 850px) {
-      .main-layout {
-        grid-template-columns: 1fr;
+    // Base layer (grounding)
+    for (let x = 0; x < GRID_SIZE; x++) {
+      for (let z = 0; z < GRID_SIZE; z++) {
+        if (Math.random() > 0.3) grid[x][0][z] = true;
       }
     }
+    grid[0][0][0] = true;
 
-    .card {
-      background: var(--panel-bg);
-      border: 1fr solid var(--border-color);
-      border-radius: 8px;
-      padding: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .card h2 {
-      font-size: 1.1rem;
-      width: 100%;
-      border-bottom: 2px solid var(--grid-color);
-      padding-bottom: 8px;
-      margin-bottom: 12px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    canvas {
-      background: #ffffff;
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      width: 100%;
-      height: 380px;
-      max-width: 500px;
-    }
-
-    .controls-panel {
-      width: 100%;
-      max-width: 1100px;
-      background: var(--panel-bg);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 16px;
-      margin-top: 20px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .btn-group {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    button {
-      background-color: var(--primary-color);
-      color: white;
-      border: none;
-      padding: 8px 14px;
-      border-radius: 6px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background-color 0.2s;
-    }
-
-    button:hover {
-      background-color: var(--primary-hover);
-    }
-
-    button.secondary {
-      background-color: #64748b;
-    }
-
-    button.secondary:hover {
-      background-color: #475569;
-    }
-
-    .toggle-label {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.9rem;
-      font-weight: 500;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .toggle-label input {
-      accent-color: var(--primary-color);
-      width: 16px;
-      height: 16px;
-    }
-
-    .legend {
-      display: flex;
-      gap: 16px;
-      font-size: 0.85rem;
-      color: #475569;
-      margin-top: 8px;
-      width: 100%;
-    }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .line-sample {
-      width: 24px;
-      height: 2px;
-    }
-    .line-sample.solid { background: var(--line-visible); }
-    .line-sample.dashed { border-top: 2px dashed var(--line-hidden); height: 0; }
-  </style>
-</head>
-<body>
-
-  <header>
-    <h1>Engineering Graphics: Multi-View Practice Engine</h1>
-    <p class="subtitle">Draft the Front, Top, and Right views on engineering grid paper, then reveal the solution key to check your work.</p>
-  </header>
-
-  <div class="main-layout">
-    <!-- Isometric 3D View -->
-    <div class="card">
-      <h2>1. Isometric View (Problem)</h2>
-      <canvas id="isoCanvas" width="500" height="380"></canvas>
-    </div>
-
-    <!-- Orthographic Views (Answer Key) -->
-    <div class="card">
-      <h2>2. Orthographic Projections (Answer Key)</h2>
-      <canvas id="orthoCanvas" width="500" height="380"></canvas>
-    </div>
-  </div>
-
-  <!-- Controls Panel -->
-  <div class="controls-panel">
-    <div class="btn-group">
-      <button id="btnNew">Generate Random Shape</button>
-      <button id="btnReset" class="secondary">Reset Views</button>
-    </div>
-
-    <div class="btn-group">
-      <label class="toggle-label">
-        <input type="checkbox" id="chkFront"> Show Front
-      </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="chkTop"> Show Top
-      </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="chkRight"> Show Right
-      </label>
-      <label class="toggle-label">
-        <input type="checkbox" id="chkHidden" checked> Show Hidden Lines
-      </label>
-    </div>
-  </div>
-
-  <script>
-    // Grid dimensions: 3x3x3 grid of voxel cubes
-    const GRID_SIZE = 3;
-    let grid = Array(GRID_SIZE).fill().map(() => 
-      Array(GRID_SIZE).fill().map(() => 
-        Array(GRID_SIZE).fill(false)
-      )
-    );
-
-    // Canvas contexts
-    const isoCanvas = document.getElementById('isoCanvas');
-    const isoCtx = isoCanvas.getContext('2d');
-    const orthoCanvas = document.getElementById('orthoCanvas');
-    const orthoCtx = orthoCanvas.getContext('2d');
-
-    // UI elements
-    const chkFront = document.getElementById('chkFront');
-    const chkTop = document.getElementById('chkTop');
-    const chkRight = document.getElementById('chkRight');
-    const chkHidden = document.getElementById('chkHidden');
-
-    // Generate random stable shape
-    function generateShape() {
-      // Clear grid
-      for(let x=0; x<GRID_SIZE; x++)
-        for(let y=0; y<GRID_SIZE; y++)
-          for(let z=0; z<GRID_SIZE; z++)
-            grid[x][y][z] = false;
-
-      // Base layer (grounding)
-      for(let x=0; x<GRID_SIZE; x++) {
-        for(let z=0; z<GRID_SIZE; z++) {
-          if (Math.random() > 0.3) grid[x][0][z] = true;
-        }
-      }
-      grid[0][0][0] = true; // guarantee at least 1 block
-
-      // Build up upward layers with cantilever safety
-      for(let y=1; y<GRID_SIZE; y++) {
-        for(let x=0; x<GRID_SIZE; x++) {
-          for(let z=0; z<GRID_SIZE; z++) {
-            if (grid[x][y-1][z] && Math.random() > 0.5) {
-              grid[x][y][z] = true;
-            }
+    // Build up upward layers with cantilever safety
+    for (let y = 1; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let z = 0; z < GRID_SIZE; z++) {
+          if (grid[x][y - 1][z] && Math.random() > 0.5) {
+            grid[x][y][z] = true;
           }
         }
       }
-      renderAll();
+    }
+    renderAll();
+  }
+
+  // ----------------- ISOMETRIC -----------------
+  function drawIsometric() {
+    isoCtx.clearRect(0, 0, isoCanvas.width, isoCanvas.height);
+
+    const cubeW = 40;
+    const cubeH = 40;
+    const ang = Math.PI / 6; // 30deg
+    const cos = Math.cos(ang), sin = Math.sin(ang);
+
+    // Project function uses an origin that we will compute to center the solid.
+    function isoProject(x, y, z, originX, originY) {
+      const isoX = originX + (x - z) * (cubeW * cos);
+      const isoY = originY - y * cubeH + (x + z) * (cubeW * sin);
+      return [isoX, isoY];
     }
 
-    // --- ISOMETRIC RENDERING ---
-    function drawIsometric() {
-      isoCtx.clearRect(0, 0, isoCanvas.width, isoCanvas.height);
-      
-      const originX = isoCanvas.width / 2;
-      const originY = 280;
-      const cubeWidth = 40;
-      const cubeHeight = 40;
+    // Collect all visible cube corner points to compute bounds
+    let minX = Infinity, minY = Infinity;
+    let maxX = -Infinity, maxY = -Infinity;
 
-      // Isometric axis transformations
-      function isoProject(x, y, z) {
-        const isoX = originX + (x - z) * (cubeWidth * Math.cos(Math.PI / 6));
-        const isoY = originY - y * cubeHeight + (x + z) * (cubeWidth * Math.sin(Math.PI / 6));
-        return [isoX, isoY];
-      }
+    // We'll assume each filled voxel contributes corners; compute bounds for all filled voxels.
+    for (let x = 0; x < GRID_SIZE; x++) {
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let z = 0; z < GRID_SIZE; z++) {
+          if (!grid[x][y][z]) continue;
 
-      // Draw background grid lines
-      isoCtx.strokeStyle = '#f1f5f9';
-      isoCtx.lineWidth = 1;
+          const corners = [
+            [x, y, z],
+            [x + 1, y, z],
+            [x + 1, y + 1, z],
+            [x, y + 1, z],
+            [x, y, z + 1],
+            [x + 1, y, z + 1],
+            [x + 1, y + 1, z + 1],
+            [x, y + 1, z + 1],
+          ];
 
-      // Render cubes back-to-front sorting (Painter's Algorithm)
-      for(let y=0; y<GRID_SIZE; y++) {
-        for(let z=GRID_SIZE-1; z>=0; z--) {
-          for(let x=0; x<GRID_SIZE; x++) {
-            if (grid[x][y][z]) {
-              drawIsoCube(isoCtx, x, y, z, isoProject, cubeWidth);
-            }
+          // For bounds, use originX=0, originY=0 then later center by shifting.
+          for (const [cx, cy, cz] of corners) {
+            const [px, py] = isoProject(cx, cy, cz, 0, 0);
+            minX = Math.min(minX, px);
+            minY = Math.min(minY, py);
+            maxX = Math.max(maxX, px);
+            maxY = Math.max(maxY, py);
           }
         }
       }
-
-      // Draw Axis markers
-      isoCtx.font = "bold 12px sans-serif";
-      isoCtx.fillStyle = "#0284c7";
-      const [fx, fy] = isoProject(3.2, 0, 0);
-      isoCtx.fillText("FRONT VIEW ➔", fx - 30, fy + 20);
-      
-      const [rx, ry] = isoProject(0, 0, 3.2);
-      isoCtx.fillText("➔ RIGHT VIEW", rx - 30, ry + 20);
     }
 
-    function drawIsoCube(ctx, x, y, z, isoProject, size) {
-      const topColor = '#ffffff';
-      const leftColor = '#e2e8f0';
-      const rightColor = '#cbd5e1';
-      const strokeColor = '#0f172a';
+    // Add padding and compute centered origin
+    const pad = 30;
+    const contentW = (maxX - minX);
+    const contentH = (maxY - minY);
 
-      const p0 = isoProject(x, y, z);
-      const p1 = isoProject(x + 1, y, z);
-      const p2 = isoProject(x + 1, y + 1, z);
-      const p3 = isoProject(x, y + 1, z);
-      const p4 = isoProject(x, y, z + 1);
-      const p5 = isoProject(x + 1, y, z + 1);
-      const p6 = isoProject(x + 1, y + 1, z + 1);
-      const p7 = isoProject(x, y + 1, z + 1);
+    const originX = (isoCanvas.width - contentW) / 2 - minX + pad * 0.15;
+    const originY = (isoCanvas.height - contentH) / 2 - minY + contentH * 0.08 + pad * 0.35;
 
-      // Top Face
+    // Draw cubes back-to-front (painter's algorithm)
+    for (let y = 0; y < GRID_SIZE; y++) {
+      for (let z = GRID_SIZE - 1; z >= 0; z--) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          if (grid[x][y][z]) {
+            drawIsoCube(isoCtx, x, y, z, (cx, cy, cz) => isoProject(cx, cy, cz, originX, originY));
+          }
+        }
+      }
+    }
+
+    // Labels (optional)
+    isoCtx.font = "bold 12px sans-serif";
+    isoCtx.fillStyle = "#0284c7";
+    const [fx, fy] = isoProject(GRID_SIZE, 0, 0, originX, originY);
+    isoCtx.fillText("FRONT →", fx - 35, fy + 18);
+  }
+
+  function drawIsoCube(ctx, x, y, z, project) {
+    const topColor = '#ffffff';
+    const leftColor = '#e2e8f0';
+    const rightColor = '#cbd5e1';
+    const strokeColor = '#0f172a';
+
+    const p0 = project(x, y, z);
+    const p1 = project(x + 1, y, z);
+    const p2 = project(x + 1, y + 1, z);
+    const p3 = project(x, y + 1, z);
+    const p4 = project(x, y, z + 1);
+    const p5 = project(x + 1, y, z + 1);
+    const p6 = project(x + 1, y + 1, z + 1);
+    const p7 = project(x, y + 1, z + 1);
+
+    // Top
+    ctx.beginPath();
+    ctx.moveTo(p3[0], p3[1]);
+    ctx.lineTo(p2[0], p2[1]);
+    ctx.lineTo(p6[0], p6[1]);
+    ctx.lineTo(p7[0], p7[1]);
+    ctx.closePath();
+    ctx.fillStyle = topColor;
+    ctx.fill();
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Left
+    ctx.beginPath();
+    ctx.moveTo(p0[0], p0[1]);
+    ctx.lineTo(p1[0], p1[1]);
+    ctx.lineTo(p2[0], p2[1]);
+    ctx.lineTo(p3[0], p3[1]);
+    ctx.closePath();
+    ctx.fillStyle = leftColor;
+    ctx.fill();
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // Right
+    ctx.beginPath();
+    ctx.moveTo(p1[0], p1[1]);
+    ctx.lineTo(p5[0], p5[1]);
+    ctx.lineTo(p6[0], p6[1]);
+    ctx.lineTo(p2[0], p2[1]);
+    ctx.closePath();
+    ctx.fillStyle = rightColor;
+    ctx.fill();
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+
+  // ----------------- ORTHOGRAPHIC (wireframe edges) -----------------
+  function drawOrthographic() {
+    orthoCtx.clearRect(0, 0, orthoCanvas.width, orthoCanvas.height);
+
+    const cellSize = 30;
+    const showHidden = chkHidden.checked;
+
+    const topOrigin = { x: 80, y: 30 };
+    const frontOrigin = { x: 80, y: 180 };
+    const rightOrigin = { x: 280, y: 180 };
+
+    if (chkTop.checked) {
+      drawGridFrame(orthoCtx, topOrigin.x, topOrigin.y, cellSize, "TOP VIEW");
+      drawOrthoSolidEdges(orthoCtx, topOrigin.x, topOrigin.y, cellSize, 'top', showHidden);
+    }
+    if (chkFront.checked) {
+      drawGridFrame(orthoCtx, frontOrigin.x, frontOrigin.y, cellSize, "FRONT VIEW");
+      drawOrthoSolidEdges(orthoCtx, frontOrigin.x, frontOrigin.y, cellSize, 'front', showHidden);
+    }
+    if (chkRight.checked) {
+      drawGridFrame(orthoCtx, rightOrigin.x, rightOrigin.y, cellSize, "RIGHT SIDE VIEW");
+      drawOrthoSolidEdges(orthoCtx, rightOrigin.x, rightOrigin.y, cellSize, 'right', showHidden);
+    }
+
+    // Alignment dashed lines (same as your original)
+    orthoCtx.strokeStyle = '#e2e8f0';
+    orthoCtx.setLineDash([2, 4]);
+    if (chkTop.checked && chkFront.checked) {
+      for (let i = 0; i <= 3; i++) {
+        orthoCtx.beginPath();
+        orthoCtx.moveTo(topOrigin.x + i * cellSize, topOrigin.y + 3 * cellSize);
+        orthoCtx.lineTo(frontOrigin.x + i * cellSize, frontOrigin.y);
+        orthoCtx.stroke();
+      }
+    }
+    if (chkFront.checked && chkRight.checked) {
+      for (let i = 0; i <= 3; i++) {
+        orthoCtx.beginPath();
+        orthoCtx.moveTo(frontOrigin.x + 3 * cellSize, frontOrigin.y + i * cellSize);
+        orthoCtx.lineTo(rightOrigin.x, rightOrigin.y + i * cellSize);
+        orthoCtx.stroke();
+      }
+    }
+    orthoCtx.setLineDash([]);
+  }
+
+  function drawGridFrame(ctx, ox, oy, size, title) {
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_SIZE; i++) {
       ctx.beginPath();
-      ctx.moveTo(p3[0], p3[1]); ctx.lineTo(p2[0], p2[1]);
-      ctx.lineTo(p6[0], p6[1]); ctx.lineTo(p7[0], p7[1]);
-      ctx.closePath();
-      ctx.fillStyle = topColor; ctx.fill();
-      ctx.strokeStyle = strokeColor; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.moveTo(ox + i * size, oy);
+      ctx.lineTo(ox + i * size, oy + GRID_SIZE * size);
+      ctx.stroke();
 
-      // Left Face (Front facing direction)
       ctx.beginPath();
-      ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]);
-      ctx.lineTo(p2[0], p2[1]); ctx.lineTo(p3[0], p3[1]);
-      ctx.closePath();
-      ctx.fillStyle = leftColor; ctx.fill();
-      ctx.strokeStyle = strokeColor; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.moveTo(ox, oy + i * size);
+      ctx.lineTo(ox + GRID_SIZE * size, oy + i * size);
+      ctx.stroke();
+    }
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = "#64748b";
+    ctx.fillText(title, ox, oy - 8);
+  }
 
-      // Right Face
-      ctx.beginPath();
-      ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p5[0], p5[1]);
-      ctx.lineTo(p6[0], p6[1]); ctx.lineTo(p2[0], p2[1]);
-      ctx.closePath();
-      ctx.fillStyle = rightColor; ctx.fill();
-      ctx.strokeStyle = strokeColor; ctx.lineWidth = 1.5; ctx.stroke();
+  // Map voxel to 2D orthographic coordinates and decide which faces/edges are visible.
+  // We'll draw cube edges for each visible voxel face in 2D.
+  function drawOrthoSolidEdges(ctx, ox, oy, size, viewType, showHidden) {
+    const cubeFill = 'rgba(2, 132, 199, 0.12)';
+    const solidStroke = '#09090b';
+    const hiddenStroke = '#ef4444';
+
+    // For each view, define which 3D axis points to +screen (u), +screen (v), and depth.
+    // We'll use u/v screen directions as:
+    // - front: u = x, v = (GRID_SIZE-1 - y), depth = z
+    // - top:   u = x, v = (GRID_SIZE-1 - z), depth = y
+    // - right: u = (GRID_SIZE-1 - z), v = (GRID_SIZE-1 - y), depth = x
+    function map3DToScreen(x, y, z) {
+      let u, v, d;
+      if (viewType === 'front') {
+        u = x;
+        v = (GRID_SIZE - 1 - y);
+        d = z;
+      } else if (viewType === 'top') {
+        u = x;
+        v = (GRID_SIZE - 1 - z);
+        d = y;
+      } else { // 'right'
+        u = (GRID_SIZE - 1 - z);
+        v = (GRID_SIZE - 1 - y);
+        d = x;
+      }
+      return { u, v, d };
     }
 
-    // --- ORTHOGRAPHIC RENDERING ---
-    function drawOrthographic() {
-      orthoCtx.clearRect(0, 0, orthoCanvas.width, orthoCanvas.height);
-
-      const cellSize = 30;
-      const showHidden = chkHidden.checked;
-
-      // Layout coordinates
-      const topOrigin = { x: 80, y: 30 };
-      const frontOrigin = { x: 80, y: 180 };
-      const rightOrigin = { x: 280, y: 180 };
-
-      // Render 3 views if checked
-      if (chkTop.checked) {
-        drawGridFrame(orthoCtx, topOrigin.x, topOrigin.y, cellSize, "TOP VIEW");
-        drawOrthoProjection(orthoCtx, topOrigin.x, topOrigin.y, cellSize, 'top', showHidden);
-      }
-
-      if (chkFront.checked) {
-        drawGridFrame(orthoCtx, frontOrigin.x, frontOrigin.y, cellSize, "FRONT VIEW");
-        drawOrthoProjection(orthoCtx, frontOrigin.x, frontOrigin.y, cellSize, 'front', showHidden);
-      }
-
-      if (chkRight.checked) {
-        drawGridFrame(orthoCtx, rightOrigin.x, rightOrigin.y, cellSize, "RIGHT SIDE VIEW");
-        drawOrthoProjection(orthoCtx, rightOrigin.x, rightOrigin.y, cellSize, 'right', showHidden);
-      }
-
-      // Draw projection alignment lines when multiple views are active
-      orthoCtx.strokeStyle = '#e2e8f0';
-      orthoCtx.setLineDash([2, 4]);
-      if (chkTop.checked && chkFront.checked) {
-        for(let i=0; i<=3; i++) {
-          orthoCtx.beginPath();
-          orthoCtx.moveTo(topOrigin.x + i*cellSize, topOrigin.y + 3*cellSize);
-          orthoCtx.lineTo(frontOrigin.x + i*cellSize, frontOrigin.y);
-          orthoCtx.stroke();
-        }
-      }
-      if (chkFront.checked && chkRight.checked) {
-        for(let i=0; i<=3; i++) {
-          orthoCtx.beginPath();
-          orthoCtx.moveTo(frontOrigin.x + 3*cellSize, frontOrigin.y + i*cellSize);
-          orthoCtx.lineTo(rightOrigin.x, rightOrigin.y + i*cellSize);
-          orthoCtx.stroke();
-        }
-      }
-      orthoCtx.setLineDash([]); // Reset dash
-    }
-
-    function drawGridFrame(ctx, ox, oy, size, title) {
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1;
-      for(let i=0; i<=GRID_SIZE; i++) {
-        ctx.beginPath();
-        ctx.moveTo(ox + i*size, oy); ctx.lineTo(ox + i*size, oy + GRID_SIZE*size);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(ox, oy + i*size); ctx.lineTo(ox + GRID_SIZE*size, oy + i*size);
-        ctx.stroke();
-      }
-      ctx.font = "bold 11px sans-serif";
-      ctx.fillStyle = "#64748b";
-      ctx.fillText(title, ox, oy - 8);
-    }
-
-    function drawOrthoProjection(ctx, ox, oy, size, viewType, showHidden) {
-      // Compute 2D depth buffers and edge visibility
-      for(let r=0; r<GRID_SIZE; r++) {
-        for(let c=0; c<GRID_SIZE; c++) {
-          
-          let hasBlock = false;
-          let isHidden = false;
-
-          if (viewType === 'front') {
-            // Looking down Z axis (X = cols, Y = rows from bottom up)
-            const x = c;
-            const y = GRID_SIZE - 1 - r;
-            for(let z=0; z<GRID_SIZE; z++) {
-              if (grid[x][y][z]) {
-                hasBlock = true;
-                if (z > 0) isHidden = true; // Block behind front face
-                break;
-              }
-            }
-          } else if (viewType === 'top') {
-            // Looking down Y axis (X = cols, Z = rows from top down)
-            const x = c;
-            const z = r;
-            for(let y=GRID_SIZE-1; y>=0; y--) {
-              if (grid[x][y][z]) {
-                hasBlock = true;
-                if (y < GRID_SIZE-1) isHidden = true;
-                break;
-              }
-            }
-          } else if (viewType === 'right') {
-            // Looking from X side (Z = cols, Y = rows)
-            const z = GRID_SIZE - 1 - c;
-            const y = GRID_SIZE - 1 - r;
-            for(let x=GRID_SIZE-1; x>=0; x--) {
-              if (grid[x][y][z]) {
-                hasBlock = true;
-                if (x < GRID_SIZE-1) isHidden = true;
-                break;
-              }
-            }
-          }
-
-          if (hasBlock) {
-            ctx.fillStyle = 'rgba(2, 132, 199, 0.15)';
-            ctx.fillRect(ox + c*size, oy + r*size, size, size);
-
-            ctx.lineWidth = 2;
-            if (isHidden) {
-              if (!showHidden) continue;
-              ctx.strokeStyle = '#ef4444'; // Red dashed for hidden
-              ctx.setLineDash([4, 3]);
-            } else {
-              ctx.strokeStyle = '#09090b'; // Solid dark for visible
-              ctx.setLineDash([]);
-            }
-
-            ctx.strokeRect(ox + c*size, oy + r*size, size, size);
+    // Determine for a given projected (u,v) which voxel is front-most (smallest depth distance).
+    // We then can tell hidden vs visible by checking if another voxel exists closer at that same (u,v).
+    function frontMostDepth(u, v) {
+      let best = Infinity;
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          for (let z = 0; z < GRID_SIZE; z++) {
+            if (!grid[x][y][z]) continue;
+            const m = map3DToScreen(x, y, z);
+            if (m.u === u && m.v === v) best = Math.min(best, m.d);
           }
         }
       }
-      ctx.setLineDash([]);
+      return best;
     }
 
-    function renderAll() {
-      drawIsometric();
-      drawOrthographic();
+    // Precompute front-most depth for every (u,v) so hidden-lines behave consistently.
+    const frontDepth = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(Infinity));
+    for (let u = 0; u < GRID_SIZE; u++) {
+      for (let v = 0; v < GRID_SIZE; v++) {
+        frontDepth[u][v] = frontMostDepth(u, v);
+      }
     }
 
-    // Event Listeners
-    document.getElementById('btnNew').addEventListener('click', generateShape);
-    document.getElementById('btnReset').addEventListener('click', () => {
-      chkFront.checked = false;
-      chkTop.checked = false;
-      chkRight.checked = false;
-      drawOrthographic();
-    });
+    // Draw all filled cubes' faces as edges:
+    // We'll compute the 8 corners of each cube in (u,v) projection and draw edges.
+    // For hidden lines: draw edges for non-front-most cubes as dashed red.
+    function edgeLine(pA, pB, isHidden) {
+      ctx.beginPath();
+      ctx.moveTo(pA.x, pA.y);
+      ctx.lineTo(pB.x, pB.y);
+      ctx.lineWidth = 2;
+      if (isHidden) {
+        if (!showHidden) return;
+        ctx.strokeStyle = hiddenStroke;
+        ctx.setLineDash([5, 4]);
+      } else {
+        ctx.strokeStyle = solidStroke;
+        ctx.setLineDash([]);
+      }
+      ctx.stroke();
+    }
 
-    [chkFront, chkTop, chkRight, chkHidden].forEach(el => {
-      el.addEventListener('change', drawOrthographic);
-    });
+    // Get screen corner coordinate for cube corner at (x,y,z) with +1 extents.
+    function screenCorner(x, y, z) {
+      const m = map3DToScreen(x, y, z);
+      return {
+        x: ox + m.u * size,
+        y: oy + m.v * size
+      };
+    }
 
-    // Initialize first shape
-    generateShape();
-  </script>
-</body>
-</html>
+    // Iterate voxels; painter's order: far to near (largest d first)
+    for (let dOrder = GRID_SIZE - 1; dOrder >= 0; dOrder--) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          for (let z = 0; z < GRID_SIZE; z++) {
+            if (!grid[x][y][z]) continue;
+            const m = map3DToScreen(x, y, z);
+            if (m.d !== dOrder) continue;
+
+            const isHidden = (m.d !== frontDepth[m.u][m.v]);
+
+            // Draw a faint fill for occupied cell (helps for beginners)
+            if (!isHidden || showHidden) {
+              ctx.fillStyle = cubeFill;
+              ctx.fillRect(ox + m.u * size, oy + m.v * size, size, size);
+            }
+
+            // Cube corners in screen space
+            const c000 = screenCorner(x, y, z);
+            const c100 = screenCorner(x + 1, y, z);
+            const c110 = screenCorner(x + 1, y + 1, z);
+            const c010 = screenCorner(x, y + 1, z);
+
+            const c001 = screenCorner(x, y, z + 1);
+            const c101 = screenCorner(x + 1, y, z + 1);
+            const c111 = screenCorner(x + 1, y + 1, z + 1);
+            const c011 = screenCorner(x, y + 1, z + 1);
+
+            // Because orthographic collapses depth, many cube edges overlap in 2D.
+            // Still, drawing the visible outer edges works well for teaching.
+            // Draw bottom square edges
+            edgeLine(c000, c100, isHidden);
+            edgeLine(c100, c110, isHidden);
+            edgeLine(c110, c010, isHidden);
+            edgeLine(c010, c000, isHidden);
+
+            // Draw top square edges
+            edgeLine(c001, c101, isHidden);
+            edgeLine(c101, c111, isHidden);
+            edgeLine(c111, c011, isHidden);
+            edgeLine(c011, c001, isHidden);
+
+            // Draw vertical edges (in screen projection these often represent visible depth)
+            edgeLine(c000, c001, isHidden);
+            edgeLine(c100, c101, isHidden);
+            edgeLine(c110, c111, isHidden);
+            edgeLine(c010, c011, isHidden);
+          }
+        }
+      }
+    }
+
+    ctx.setLineDash([]);
+  }
+
+  function renderAll() {
+    drawIsometric();
+    drawOrthographic();
+  }
+
+  // Event Listeners
+  document.getElementById('btnNew').addEventListener('click', generateShape);
+  document.getElementById('btnReset').addEventListener('click', () => {
+    chkFront.checked = false;
+    chkTop.checked = false;
+    chkRight.checked = false;
+    drawOrthographic();
+  });
+
+  [chkFront, chkTop, chkRight, chkHidden].forEach(el => {
+    el.addEventListener('change', drawOrthographic);
+  });
+
+  generateShape();
+</script>
