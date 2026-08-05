@@ -81,6 +81,64 @@
             background-color: #059669;
         }
 
+        /* --- GAME BAR STYLES --- */
+        .game-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background-color: #f8fafc;
+            border: 2px solid #e2e8f0;
+            padding: 6px 12px;
+            border-radius: 8px;
+        }
+
+        .game-btn {
+            background-color: #d97706;
+            color: white;
+            border: none;
+        }
+
+        .game-btn:hover {
+            background-color: #b45309;
+        }
+
+        .game-stat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-width: 65px;
+            padding: 2px 8px;
+            background: white;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+        }
+
+        .game-stat-label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: #718096;
+            text-transform: uppercase;
+        }
+
+        .game-stat-value {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #1a202c;
+            line-height: 1.1;
+        }
+
+        .timer-warning {
+            color: #dc2626 !important;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
         .workspace {
             display: grid;
             grid-template-columns: 1fr 1.2fr;
@@ -244,6 +302,19 @@
             <button id="btn-reset">Reset View</button>
             <button id="btn-clear">Clear Workspace</button>
             <button class="success" id="btn-check">Check Answer</button>
+
+            <!-- 1-MINUTE GAME MODE MODULE -->
+            <div class="game-bar">
+                <button class="game-btn" id="btn-start-game">Start Game ⏱️</button>
+                <div class="game-stat">
+                    <span class="game-stat-label">TIME</span>
+                    <span class="game-stat-value" id="game-timer">1:00</span>
+                </div>
+                <div class="game-stat">
+                    <span class="game-stat-label">SOLVED</span>
+                    <span class="game-stat-value" id="game-score">0</span>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -299,6 +370,12 @@
     let previousPosition = { x: 0, y: 0 };
     const defaultRotation = { x: 0.4, y: -0.6 };
 
+    // Game Mode State Variables
+    let isGameActive = false;
+    let gameScore = 0;
+    let gameTimeRemaining = 60;
+    let gameTimerInterval = null;
+
     const COLORS = [0x3182ce, 0xe53e3e, 0x38a169, 0xd69e2e, 0x805ad5, 0xdd6b20];
 
     window.addEventListener('DOMContentLoaded', () => {
@@ -312,6 +389,9 @@
         document.getElementById('btn-clear').addEventListener('click', clearGrids);
         document.getElementById('btn-check').addEventListener('click', checkAnswer);
         document.getElementById('chk-reveal').addEventListener('change', toggleSolutionOverlay);
+        
+        // Game Button Handler
+        document.getElementById('btn-start-game').addEventListener('click', toggleGameMode);
 
         window.addEventListener('resize', onWindowResize);
     });
@@ -394,7 +474,6 @@
     }
 
     function generateNewSolidModel() {
-        // Reset camera rotation back to isometric view
         resetView();
 
         while(modelGroup.children.length > 0) { 
@@ -455,9 +534,9 @@
             modelGroup.add(cube);
         });
 
-        // --- ATTACH FLOOR GRID DIRECTLY TO MODEL GROUP (ROTATES WITH MODEL) ---
+        // Floor Grid attached directly to modelGroup
         const floorGrid = new THREE.GridHelper(3, 3, 0x2b6cb0, 0x4a5568);
-        floorGrid.position.y = -offset - 0.49; // Placed right underneath the bottom blocks
+        floorGrid.position.y = -offset - 0.49;
         modelGroup.add(floorGrid);
 
         createCleanLabels();
@@ -501,20 +580,14 @@
         modelGroup.add(topSprite);
     }
 
-    // --- ACCURATE THIRD-ANGLE ORTHOGRAPHIC PROJECTIONS ---
     function calculateSolutions() {
         solutionProjections.top = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(false));
         solutionProjections.front = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(false));
         solutionProjections.right = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(false));
 
         activeBlocks.forEach(b => {
-            // TOP VIEW: Row 0 = Back (z=0), Row 2 = Front (z=2). Col 0 = Left (x=0), Col 2 = Right (x=2)
             solutionProjections.top[b.z][b.x] = true;
-            
-            // FRONT VIEW: Row 0 = Top (y=2), Row 2 = Bottom (y=0). Col 0 = Left (x=0), Col 2 = Right (x=2)
             solutionProjections.front[2 - b.y][b.x] = true;
-
-            // RIGHT SIDE VIEW: Row 0 = Top (y=2), Row 2 = Bottom (y=0). Col 0 = Front (z=2), Col 2 = Back (z=0)
             solutionProjections.right[2 - b.y][2 - b.z] = true;
         });
     }
@@ -547,6 +620,56 @@
         document.getElementById('chk-reveal').checked = false;
     }
 
+    // --- GAME MODE LOGIC ---
+    function toggleGameMode() {
+        const gameBtn = document.getElementById('btn-start-game');
+
+        if (isGameActive) {
+            // Stop game prematurely
+            stopGame();
+            alert(`Game Stopped! Final Score: ${gameScore} model(s) solved.`);
+        } else {
+            // Start Game
+            isGameActive = true;
+            gameScore = 0;
+            gameTimeRemaining = 60;
+            
+            document.getElementById('game-score').innerText = gameScore;
+            document.getElementById('game-timer').innerText = "1:00";
+            document.getElementById('game-timer').classList.remove('timer-warning');
+            gameBtn.innerText = "End Game ⏹️";
+            gameBtn.style.backgroundColor = "#ef4444";
+
+            generateNewSolidModel();
+
+            gameTimerInterval = setInterval(() => {
+                gameTimeRemaining--;
+                
+                const mins = Math.floor(gameTimeRemaining / 60);
+                const secs = gameTimeRemaining % 60;
+                document.getElementById('game-timer').innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+                if (gameTimeRemaining <= 10) {
+                    document.getElementById('game-timer').classList.add('timer-warning');
+                }
+
+                if (gameTimeRemaining <= 0) {
+                    stopGame();
+                    alert(`⏳ TIME'S UP!\n\nGreat job! You solved ${gameScore} model(s) in 1 minute!`);
+                }
+            }, 1000);
+        }
+    }
+
+    function stopGame() {
+        isGameActive = false;
+        clearInterval(gameTimerInterval);
+        const gameBtn = document.getElementById('btn-start-game');
+        gameBtn.innerText = "Start Game ⏱️";
+        gameBtn.style.backgroundColor = "#d97706";
+        document.getElementById('game-timer').classList.remove('timer-warning');
+    }
+
     function checkAnswer() {
         let allCorrect = true;
 
@@ -573,9 +696,21 @@
         });
 
         if (allCorrect) {
-            alert('🎉 Perfect! All views match correctly.');
+            if (isGameActive) {
+                gameScore++;
+                document.getElementById('game-score').innerText = gameScore;
+                
+                // Auto-advance to next model instantly in game mode!
+                setTimeout(() => {
+                    generateNewSolidModel();
+                }, 400);
+            } else {
+                alert('🎉 Perfect! All views match correctly.');
+            }
         } else {
-            alert('❌ Not quite right yet!\n\n• Green = Correct\n• Red = Extra square\n• Light Red = Missed square');
+            if (!isGameActive) {
+                alert('❌ Not quite right yet!\n\n• Green = Correct\n• Red = Extra square\n• Light Red = Missed square');
+            }
         }
     }
 
