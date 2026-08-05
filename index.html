@@ -26,7 +26,6 @@
             padding: 24px;
         }
 
-        /* Header Controls */
         .header {
             display: flex;
             justify-content: space-between;
@@ -82,7 +81,6 @@
             background-color: #059669;
         }
 
-        /* Workspace Grid */
         .workspace {
             display: grid;
             grid-template-columns: 1fr 1.2fr;
@@ -110,7 +108,6 @@
             margin-bottom: 12px;
         }
 
-        /* 3D Canvas Container */
         #canvas-container {
             width: 100%;
             height: 380px;
@@ -118,7 +115,7 @@
             background: #fafafa;
             border-radius: 6px;
             overflow: hidden;
-            touch-action: none; /* Crucial for touch rotation on tablets/phones */
+            touch-action: none;
             cursor: grab;
         }
 
@@ -138,7 +135,6 @@
             margin-top: 8px;
         }
 
-        /* Orthographic Grid Section */
         .grid-views {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -181,20 +177,18 @@
             background-color: #3182ce;
         }
 
-        /* Verification Feedback Styles */
         .cell.correct {
-            background-color: #10b981 !important; /* Green */
+            background-color: #10b981 !important;
         }
 
         .cell.incorrect {
-            background-color: #ef4444 !important; /* Red */
+            background-color: #ef4444 !important;
         }
 
         .cell.missed {
-            background-color: #fca5a5 !important; /* Light Red */
+            background-color: #fca5a5 !important;
         }
 
-        /* Reveal Solution Overlay Styles */
         .cell.solution-overlay::after {
             content: '';
             position: absolute;
@@ -224,7 +218,6 @@
             height: 16px;
         }
     </style>
-    <!-- Three.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -245,14 +238,12 @@
     </div>
 
     <div class="workspace">
-        <!-- 3D Solid Model Panel -->
         <div class="panel">
             <div class="panel-title">3D SOLID MODEL</div>
             <div id="canvas-container"></div>
             <div class="instruction">💡 <strong>Click & drag</strong> (or touch & swipe) inside the 3D viewer to rotate and view all sides!</div>
         </div>
 
-        <!-- Orthographic Workspace Panel -->
         <div class="panel">
             <div class="panel-title">ORTHOGRAPHIC DRAWING WORKSPACE</div>
             <p style="font-size: 0.85rem; color: #4a5568; margin-top: 0;">Click grid cells to shade the projected faces.</p>
@@ -281,27 +272,23 @@
 </div>
 
 <script>
-    // --- Global Variables ---
     const GRID_SIZE = 3;
     let scene, camera, renderer, modelGroup;
-    let activeBlocks = []; // [{x, y, z, color}]
+    let activeBlocks = []; 
     let solutionProjections = { top: [], front: [], right: [] };
     
-    // Touch & Mouse Control
     let isDragging = false;
     let previousPosition = { x: 0, y: 0 };
     const defaultRotation = { x: 0.4, y: -0.6 };
 
     const COLORS = [0x3182ce, 0xe53e3e, 0x38a169, 0xd69e2e, 0x805ad5, 0xdd6b20];
 
-    // --- Init App ---
     window.addEventListener('DOMContentLoaded', () => {
         initThreeJS();
         setupOrthographicGrids();
         setupTouchAndMouseEvents();
         generateNewSolidModel();
         
-        // Button Event Listeners
         document.getElementById('btn-new').addEventListener('click', generateNewSolidModel);
         document.getElementById('btn-reset').addEventListener('click', resetView);
         document.getElementById('btn-clear').addEventListener('click', clearGrids);
@@ -311,14 +298,12 @@
         window.addEventListener('resize', onWindowResize);
     });
 
-    // --- 3D Scene Setup ---
     function initThreeJS() {
         const container = document.getElementById('canvas-container');
         
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0xfafafa);
 
-        // Reduced Field of View (FOV) from 45 to 28 to make the model fill more of the left panel
         camera = new THREE.PerspectiveCamera(28, container.clientWidth / container.clientHeight, 0.1, 1000);
         camera.position.set(5.5, 5.5, 8.2);
         camera.lookAt(0, 0, 0);
@@ -335,6 +320,11 @@
         dirLight.position.set(10, 20, 15);
         scene.add(dirLight);
 
+        // Ground Grid Helper for Depth Context
+        const gridHelper = new THREE.GridHelper(3, 3, 0xa0aec0, 0xe2e8f0);
+        gridHelper.position.y = -1.5;
+        scene.add(gridHelper);
+
         modelGroup = new THREE.Group();
         scene.add(modelGroup);
 
@@ -347,7 +337,6 @@
         renderer.render(scene, camera);
     }
 
-    // --- Interaction Events ---
     function setupTouchAndMouseEvents() {
         const container = document.getElementById('canvas-container');
 
@@ -391,7 +380,6 @@
         modelGroup.rotation.y = defaultRotation.y;
     }
 
-    // --- Solid Model Generator ---
     function generateNewSolidModel() {
         while(modelGroup.children.length > 0) { 
             modelGroup.remove(modelGroup.children[0]); 
@@ -411,7 +399,7 @@
         grid[x][y][z] = true;
         activeBlocks.push({x, y, z, color: COLORS[Math.floor(Math.random() * COLORS.length)]});
 
-        const targetCount = Math.floor(Math.random() * 5) + 5; // 5 to 9 blocks
+        const targetCount = Math.floor(Math.random() * 5) + 5;
         const dirs = [[1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]];
 
         while (activeBlocks.length < targetCount) {
@@ -455,11 +443,9 @@
         calculateSolutions();
         clearGrids();
         
-        // Reset Reveal Checkbox
         document.getElementById('chk-reveal').checked = false;
     }
 
-    // --- Clean Viewport Direction Text ---
     function createCleanLabels() {
         function makeTextSprite(message, colorHex) {
             const canvas = document.createElement('canvas');
@@ -494,20 +480,24 @@
         modelGroup.add(topSprite);
     }
 
-    // --- Orthographic Solution Logic ---
+    // --- ACCURATE ORTHOGRAPHIC PROJECTION CALCULATIONS ---
     function calculateSolutions() {
         solutionProjections.top = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(false));
         solutionProjections.front = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(false));
         solutionProjections.right = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(false));
 
         activeBlocks.forEach(b => {
+            // TOP VIEW: Row = Z (front-to-back), Col = X (left-to-right)
             solutionProjections.top[b.z][b.x] = true;
+            
+            // FRONT VIEW: Row = Y (inverted, top-to-bottom), Col = X (left-to-right)
             solutionProjections.front[2 - b.y][b.x] = true;
-            solutionProjections.right[2 - b.y][2 - b.z] = true;
+
+            // RIGHT SIDE VIEW: Row = Y (inverted), Col = Z (front-to-back)
+            solutionProjections.right[2 - b.y][b.z] = true;
         });
     }
 
-    // --- Interactive 2D Grid Setup ---
     function setupOrthographicGrids() {
         ['top', 'front', 'right'].forEach(view => {
             const gridEl = document.getElementById(`grid-${view}`);
@@ -536,7 +526,6 @@
         document.getElementById('chk-reveal').checked = false;
     }
 
-    // --- Check Answer Functionality ---
     function checkAnswer() {
         let allCorrect = true;
 
@@ -563,13 +552,12 @@
         });
 
         if (allCorrect) {
-            alert('🎉 Perfect! All views are completely correct.');
+            alert('🎉 Perfect! All orthographic projections are correct.');
         } else {
             alert('❌ Not quite right yet!\n\n• Green = Correct\n• Red = Extra square\n• Light Red = Missed square');
         }
     }
 
-    // --- Reveal Solution Overlay Functionality ---
     function toggleSolutionOverlay(e) {
         const isChecked = e.target.checked;
 
