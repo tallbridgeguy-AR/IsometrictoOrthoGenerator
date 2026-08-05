@@ -140,6 +140,14 @@
       border-radius: 8px;
     }
 
+    #isoCanvas {
+      cursor: grab;
+    }
+
+    #isoCanvas:active {
+      cursor: grabbing;
+    }
+
     .status-bar {
       margin-top: 12px;
       padding: 10px 14px;
@@ -188,6 +196,7 @@
       <option value="3" selected>3 x 3 x 3</option>
     </select>
     <button id="btnNew">New Model</button>
+    <button id="btnResetView" class="btn-outline">Reset View</button>
     <button id="btnClear" class="btn-outline">Clear Workspace</button>
     <button id="btnCheck" class="btn-success">Check Answer</button>
   </div>
@@ -199,7 +208,7 @@
     <div class="panel-title">3D Solid Model</div>
     <canvas id="isoCanvas" width="380" height="420"></canvas>
     <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">
-      Front view sightline looks <strong>↗ North-East</strong> into the model. Right side view looks <strong>↖ North-West</strong>.
+      💡 <strong>Click and drag</strong> inside the 3D viewer to rotate and view all sides!
     </p>
   </div>
 
@@ -225,6 +234,13 @@
   let grid = [];
   let colorGrid = [];
   let studentGrid = {};
+
+  // Viewport Rotation Variables (3D Orbit)
+  let rotX = Math.PI / 6;    // Pitch Angle
+  let rotY = -Math.PI / 4;   // Yaw Angle
+  let isDragging = false;
+  let lastMouseX = 0;
+  let lastMouseY = 0;
 
   const PALETTE = [
     '#e11d48', // Red
@@ -256,7 +272,6 @@
   const isoCtx = setupHiDPI(isoCanvas, 380, 420);
   const orthoCtx = setupHiDPI(orthoCanvas, 680, 420);
 
-  // FIX 1: Corrected bitwise positioning (R << 16 | G << 8 | B)
   function adjustColor(col, amt) {
     let num = parseInt(col.slice(1), 16);
     let r = Math.min(255, Math.max(0, (num >> 16) + amt));
@@ -290,10 +305,10 @@
       )
     );
 
-    // 1. Footprint layer (y = 0)
+    // Strictly bounds blocks to exact grid bounds
     for (let x = 0; x < GRID_SIZE; x++) {
       for (let z = 0; z < GRID_SIZE; z++) {
-        if (Math.random() > 0.3) {
+        if (Math.random() > 0.35) {
           grid[x][0][z] = true;
           colorGrid[x][0][z] = PALETTE[Math.floor(Math.random() * PALETTE.length)];
         }
@@ -302,11 +317,10 @@
     grid[0][0][0] = true;
     if (!colorGrid[0][0][0]) colorGrid[0][0][0] = PALETTE[0];
 
-    // 2. Vertical columns
     for (let y = 1; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         for (let z = 0; z < GRID_SIZE; z++) {
-          if (grid[x][y - 1][z] && Math.random() > 0.45) {
+          if (grid[x][y - 1][z] && Math.random() > 0.5) {
             grid[x][y][z] = true;
             colorGrid[x][y][z] = (Math.random() > 0.4) 
               ? PALETTE[Math.floor(Math.random() * PALETTE.length)] 
@@ -319,86 +333,120 @@
     renderAll();
   }
 
-  // Draw 3D Isometric View
+  // 3D Orbital Matrix Transformations
+  function project3D(x, y, z) {
+    const cx = (GRID_SIZE - 1) / 2;
+    const cy = (GRID_SIZE - 1) / 2;
+    const cz = (GRID_SIZE - 1) / 2;
+
+    let dx = x - cx;
+    let dy = y - cy;
+    let dz = z - cz;
+
+    // Yaw Rotation (Horizontal)
+    let x1 = dx * Math.cos(rotY) + dz * Math.sin(rotY);
+    let z1 = -dx * Math.sin(rotY) + dz * Math.cos(rotY);
+
+    // Pitch Rotation (Vertical)
+    let y2 = dy * Math.cos(rotX) - z1 * Math.sin(rotX);
+    let z2 = dy * Math.sin(rotX) + z1 * Math.cos(rotX);
+
+    const scale = GRID_SIZE === 2 ? 65 : 45;
+    const originX = 190;
+    const originY = 220;
+
+    return {
+      x: originX + x1 * scale,
+      y: originY - y2 * scale,
+      z: z2
+    };
+  }
+
+  // Render Dynamic 3D Solid Model with Rotation
   function drawIsometric() {
     isoCtx.clearRect(0, 0, 380, 420);
 
-    const cubeW = GRID_SIZE === 2 ? 55 : 42;
-    const cubeH = cubeW;
-    const ang = Math.PI / 6;
-    const cos = Math.cos(ang);
-    const sin = Math.sin(ang);
+    let faces = [];
 
-    const originX = 190;
-    const originY = 240;
+    for (let x = 0; x < GRID_SIZE; x++) {
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let z = 0; z < GRID_SIZE; z++) {
+          if (!grid[x][y][z]) continue;
 
-    function isoProject(x, y, z) {
-      return [
-        originX + (x - z) * (cubeW * cos),
-        originY - y * cubeH + (x + z) * (cubeW * sin)
-      ];
+          const baseColor = colorGrid[x][y][z] || '#2563eb';
+
+          // Vertex coordinates of cube
+          const verts = {
+            c000: project3D(x, y, z),
+            c100: project3D(x + 1, y, z),
+            c110: project3D(x + 1, y + 1, z),
+            c010: project3D(x, y + 1, z),
+            c001: project3D(x, y, z + 1),
+            c101: project3D(x + 1, y, z + 1),
+            c111: project3D(x + 1, y + 1, z + 1),
+            c011: project3D(x, y + 1, z + 1)
+          };
+
+          const addFace = (pA, pB, pC, pD, cStart, cEnd) => {
+            const avgZ = (pA.z + pB.z + pC.z + pD.z) / 4;
+            faces.push({ pA, pB, pC, pD, cStart, cEnd, avgZ });
+          };
+
+          // Top Face (+Y)
+          if (y === GRID_SIZE - 1 || !grid[x][y + 1][z]) {
+            addFace(verts.c010, verts.c110, verts.c111, verts.c011, adjustColor(baseColor, 50), adjustColor(baseColor, 15));
+          }
+          // Bottom Face (-Y)
+          if (y === 0 || !grid[x][y - 1][z]) {
+            addFace(verts.c001, verts.c101, verts.c100, verts.c000, adjustColor(baseColor, -40), adjustColor(baseColor, -60));
+          }
+          // Front Face (+Z)
+          if (z === GRID_SIZE - 1 || !grid[x][y][z + 1]) {
+            addFace(verts.c001, verts.c101, verts.c111, verts.c011, baseColor, adjustColor(baseColor, -20));
+          }
+          // Back Face (-Z)
+          if (z === 0 || !grid[x][y][z - 1]) {
+            addFace(verts.c100, verts.c000, verts.c010, verts.c110, adjustColor(baseColor, -30), adjustColor(baseColor, -50));
+          }
+          // Right Face (+X)
+          if (x === GRID_SIZE - 1 || !grid[x + 1][y][z]) {
+            addFace(verts.c100, verts.c101, verts.c111, verts.c110, adjustColor(baseColor, -25), adjustColor(baseColor, -45));
+          }
+          // Left Face (-X)
+          if (x === 0 || !grid[x - 1][y][z]) {
+            addFace(verts.c000, verts.c001, verts.c011, verts.c010, adjustColor(baseColor, -10), adjustColor(baseColor, -30));
+          }
+        }
+      }
     }
 
-    function drawIsoFace(pA, pB, pC, pD, cStart, cEnd) {
+    // Depth Sorting for 3D Faces
+    faces.sort((a, b) => a.avgZ - b.avgZ);
+
+    faces.forEach(f => {
       isoCtx.beginPath();
-      isoCtx.moveTo(pA[0], pA[1]);
-      isoCtx.lineTo(pB[0], pB[1]);
-      isoCtx.lineTo(pC[0], pC[1]);
-      isoCtx.lineTo(pD[0], pD[1]);
+      isoCtx.moveTo(f.pA.x, f.pA.y);
+      isoCtx.lineTo(f.pB.x, f.pB.y);
+      isoCtx.lineTo(f.pC.x, f.pC.y);
+      isoCtx.lineTo(f.pD.x, f.pD.y);
       isoCtx.closePath();
 
-      const grad = isoCtx.createLinearGradient(pA[0], pA[1], pC[0], pC[1]);
-      grad.addColorStop(0, cStart);
-      grad.addColorStop(1, cEnd);
+      const grad = isoCtx.createLinearGradient(f.pA.x, f.pA.y, f.pC.x, f.pC.y);
+      grad.addColorStop(0, f.cStart);
+      grad.addColorStop(1, f.cEnd);
 
       isoCtx.fillStyle = grad;
       isoCtx.fill();
       isoCtx.strokeStyle = '#0f172a';
       isoCtx.lineWidth = 1.5;
       isoCtx.stroke();
-    }
+    });
 
-    // FIX 2: Correct Painter's Algorithm loop order (X -> Z -> Y)
-    // Draw back-to-front: lowest x, lowest z, lowest y first
-    for (let x = 0; x < GRID_SIZE; x++) {
-      for (let z = 0; z < GRID_SIZE; z++) {
-        for (let y = 0; y < GRID_SIZE; y++) {
-          if (!grid[x][y][z]) continue;
-
-          const baseColor = colorGrid[x][y][z] || '#2563eb';
-
-          const p0 = isoProject(x, y, z);
-          const p1 = isoProject(x + 1, y, z);
-          const p2 = isoProject(x + 1, y + 1, z);
-          const p3 = isoProject(x, y + 1, z);
-          const p4 = isoProject(x, y, z + 1);
-          const p5 = isoProject(x + 1, y, z + 1);
-          const p6 = isoProject(x + 1, y + 1, z + 1);
-          const p7 = isoProject(x, y + 1, z + 1);
-
-          // Top Face (+Y)
-          if (y === GRID_SIZE - 1 || !grid[x][y + 1][z]) {
-            drawIsoFace(p3, p2, p6, p7, adjustColor(baseColor, 50), adjustColor(baseColor, 15));
-          }
-
-          // Front Face (+Z)
-          if (z === GRID_SIZE - 1 || !grid[x][y][z + 1]) {
-            drawIsoFace(p4, p5, p6, p7, baseColor, adjustColor(baseColor, -20));
-          }
-
-          // Right Face (+X)
-          if (x === GRID_SIZE - 1 || !grid[x + 1][y][z]) {
-            drawIsoFace(p1, p5, p6, p2, adjustColor(baseColor, -25), adjustColor(baseColor, -45));
-          }
-        }
-      }
-    }
-
-    // Arrow Drawing Helper
-    function drawArrow(fromX, fromY, toX, toY, color, label) {
+    // Arrow Helper (MOVED UP FOR CLEARANCE)
+    function drawArrow(fromP, toP, color, label) {
       const headlen = 10;
-      const dx = toX - fromX;
-      const dy = toY - fromY;
+      const dx = toP.x - fromP.x;
+      const dy = toP.y - fromP.y;
       const angle = Math.atan2(dy, dx);
 
       isoCtx.strokeStyle = color;
@@ -406,36 +454,63 @@
       isoCtx.lineWidth = 3;
 
       isoCtx.beginPath();
-      isoCtx.moveTo(fromX, fromY);
-      isoCtx.lineTo(toX, toY);
+      isoCtx.moveTo(fromP.x, fromP.y);
+      isoCtx.lineTo(toP.x, toP.y);
       isoCtx.stroke();
 
       isoCtx.beginPath();
-      isoCtx.moveTo(toX, toY);
-      isoCtx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 6), toY - headlen * Math.sin(angle - Math.PI / 6));
-      isoCtx.lineTo(toX - headlen * Math.cos(angle + Math.PI / 6), toY - headlen * Math.sin(angle + Math.PI / 6));
+      isoCtx.moveTo(toP.x, toP.y);
+      isoCtx.lineTo(toP.x - headlen * Math.cos(angle - Math.PI / 6), toP.y - headlen * Math.sin(angle - Math.PI / 6));
+      isoCtx.lineTo(toP.x - headlen * Math.cos(angle + Math.PI / 6), toP.y - headlen * Math.sin(angle + Math.PI / 6));
       isoCtx.closePath();
       isoCtx.fill();
 
       isoCtx.font = "bold 12px sans-serif";
-      if (dx > 0) {
-        isoCtx.fillText(label, fromX - 60, fromY + 5);
-      } else {
-        isoCtx.fillText(label, fromX + 10, fromY + 5);
-      }
+      isoCtx.fillText(label, fromP.x - 20, fromP.y - 12);
     }
 
-    const [fx, fy] = isoProject(GRID_SIZE / 2, 0, GRID_SIZE);
-    drawArrow(fx - 45, fy + 30, fx - 10, fy + 8, '#4f46e5', "FRONT ↗");
+    // Front, Right & Top Direction Indicators
+    const pFrontBase = project3D(GRID_SIZE / 2, 0, GRID_SIZE + 0.8);
+    const pFrontTarget = project3D(GRID_SIZE / 2, 0, GRID_SIZE);
+    drawArrow(pFrontBase, pFrontTarget, '#4f46e5', "FRONT");
 
-    const [rx, ry] = isoProject(GRID_SIZE, 0, GRID_SIZE / 2);
-    drawArrow(rx + 45, ry + 30, rx + 10, ry + 8, '#059669', "↖ RIGHT");
+    const pRightBase = project3D(GRID_SIZE + 0.8, 0, GRID_SIZE / 2);
+    const pRightTarget = project3D(GRID_SIZE, 0, GRID_SIZE / 2);
+    drawArrow(pRightBase, pRightTarget, '#059669', "RIGHT");
 
-    const [tx, ty] = isoProject(GRID_SIZE / 2, GRID_SIZE, GRID_SIZE / 2);
-    drawArrow(tx, ty - 40, tx, ty - 10, '#d97706', "TOP ↓");
+    // Top arrow moved substantially upwards (+2.2 Y OFFSET)
+    const pTopBase = project3D(GRID_SIZE / 2, GRID_SIZE + 2.2, GRID_SIZE / 2);
+    const pTopTarget = project3D(GRID_SIZE / 2, GRID_SIZE + 0.2, GRID_SIZE / 2);
+    drawArrow(pTopBase, pTopTarget, '#d97706', "TOP ↓");
   }
 
-  // FIX 3: Fully calibrated Orthographic Raycasting for exact view mapping
+  // Mouse Interactive 3D Rotations
+  isoCanvas.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - lastMouseX;
+    const dy = e.clientY - lastMouseY;
+
+    rotY += dx * 0.01;
+    rotX += dy * 0.01;
+
+    // Clamp vertical tilt range
+    rotX = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, rotX));
+
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+
+    drawIsometric();
+  });
+
+  window.addEventListener('mouseup', () => { isDragging = false; });
+
+  // Calculate True Orthographic Projections
   function getGroundTruth() {
     const truth = {
       front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
@@ -448,7 +523,7 @@
       }
     };
 
-    // 1. FRONT VIEW: Looking along +Z to -Z
+    // FRONT VIEW
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const x = u;
@@ -463,11 +538,11 @@
       }
     }
 
-    // 2. TOP VIEW: Looking down -Y
+    // TOP VIEW
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const x = u;
-        const z = v; // Top is Z=0 (Back), Bottom is Z=GRID_SIZE-1 (Front)
+        const z = v;
         for (let y = GRID_SIZE - 1; y >= 0; y--) {
           if (grid[x][y][z]) {
             truth.top[u][v] = true;
@@ -478,10 +553,10 @@
       }
     }
 
-    // 3. RIGHT SIDE VIEW: Looking along +X to -X
+    // RIGHT SIDE VIEW
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
-        const z = (GRID_SIZE - 1) - u; // Left edge is Front (+Z), Right edge is Back (-Z)
+        const z = (GRID_SIZE - 1) - u;
         const y = GRID_SIZE - 1 - v;
         for (let x = GRID_SIZE - 1; x >= 0; x--) {
           if (grid[x][y][z]) {
@@ -509,7 +584,6 @@
     };
   }
 
-  // Render 2D Orthographic Canvas
   function drawOrthographic() {
     orthoCtx.clearRect(0, 0, 680, 420);
     const layout = getOrthoLayout();
@@ -525,7 +599,6 @@
     views.forEach(v => {
       const { x: ox, y: oy } = v.origin;
 
-      // Grid Lines
       orthoCtx.strokeStyle = '#cbd5e1';
       orthoCtx.lineWidth = 1;
       for (let i = 0; i <= GRID_SIZE; i++) {
@@ -540,12 +613,10 @@
         orthoCtx.stroke();
       }
 
-      // Title
       orthoCtx.font = "bold 12px sans-serif";
       orthoCtx.fillStyle = "#475569";
       orthoCtx.fillText(v.name, ox, oy - 10);
 
-      // Student Input Shading
       for (let u = 0; u < GRID_SIZE; u++) {
         for (let vIdx = 0; vIdx < GRID_SIZE; vIdx++) {
           const cx = ox + u * layout.cellSize;
@@ -558,7 +629,6 @@
         }
       }
 
-      // Solution Overlay with True Color Matching
       if (showSolution) {
         for (let u = 0; u < GRID_SIZE; u++) {
           for (let vIdx = 0; vIdx < GRID_SIZE; vIdx++) {
@@ -580,11 +650,9 @@
       }
     });
 
-    // Alignment Guidelines
     orthoCtx.strokeStyle = '#94a3b8';
     orthoCtx.setLineDash([3, 3]);
     
-    // Top -> Front Vertical Projection
     for (let i = 0; i <= GRID_SIZE; i++) {
       const x = layout.top.x + i * layout.cellSize;
       orthoCtx.beginPath();
@@ -593,7 +661,6 @@
       orthoCtx.stroke();
     }
 
-    // Front -> Right Horizontal Projection
     for (let i = 0; i <= GRID_SIZE; i++) {
       const y = layout.front.y + i * layout.cellSize;
       orthoCtx.beginPath();
@@ -604,7 +671,6 @@
     orthoCtx.setLineDash([]);
   }
 
-  // Click Interaction
   orthoCanvas.addEventListener('click', (e) => {
     const rect = orthoCanvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
@@ -629,7 +695,6 @@
     });
   });
 
-  // Automated Checker
   function checkAnswer() {
     const truth = getGroundTruth();
     let totalCells = GRID_SIZE * GRID_SIZE * 3;
@@ -661,6 +726,11 @@
   }
 
   document.getElementById('btnNew').addEventListener('click', generateShape);
+  document.getElementById('btnResetView').addEventListener('click', () => {
+    rotX = Math.PI / 6;
+    rotY = -Math.PI / 4;
+    drawIsometric();
+  });
   document.getElementById('btnClear').addEventListener('click', () => {
     resetStudentGrid();
     statusBar.style.display = 'none';
