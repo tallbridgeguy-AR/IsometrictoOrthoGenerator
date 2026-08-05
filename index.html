@@ -290,6 +290,10 @@
 
   function generateShape() {
     GRID_SIZE = parseInt(sizeSelect.value, 10);
+    
+    // Auto uncheck reveal solution on new model generation
+    chkSolution.checked = false;
+    
     resetStudentGrid();
     statusBar.style.display = 'none';
 
@@ -347,7 +351,6 @@
     let y2 = dy * Math.cos(rotX) - z1 * Math.sin(rotX);
     let z2 = dy * Math.sin(rotX) + z1 * Math.cos(rotX);
 
-    // Slightly reduced scale factor to give arrows breathing room
     const scale = GRID_SIZE === 2 ? 55 : 38;
     const originX = 190;
     const originY = 230;
@@ -430,7 +433,6 @@
       isoCtx.stroke();
     });
 
-    // Drawing Arrow Labels with Increased Offsets
     function drawArrow(fromP, toP, color, label, textOffsetX = 0, textOffsetY = 0) {
       const headlen = 10;
       const dx = toP.x - fromP.x;
@@ -457,20 +459,16 @@
       isoCtx.fillText(label, fromP.x + textOffsetX, fromP.y + textOffsetY);
     }
 
-    // Dynamic Distances Pushed Significantly Further Off Canvas Center
     const offsetBase = GRID_SIZE === 2 ? 1.8 : 1.5;
 
-    // FRONT Arrow
     const pFrontBase = project3D(GRID_SIZE / 2, -0.3, GRID_SIZE + offsetBase);
     const pFrontTarget = project3D(GRID_SIZE / 2, -0.3, GRID_SIZE + 0.3);
     drawArrow(pFrontBase, pFrontTarget, '#4f46e5', "FRONT ↗", -55, 10);
 
-    // RIGHT Arrow
     const pRightBase = project3D(GRID_SIZE + offsetBase, -0.3, GRID_SIZE / 2);
     const pRightTarget = project3D(GRID_SIZE + 0.3, -0.3, GRID_SIZE / 2);
     drawArrow(pRightBase, pRightTarget, '#059669', "↖ RIGHT", 10, 10);
 
-    // TOP Arrow (Pushed significantly above the highest point)
     const pTopBase = project3D(GRID_SIZE / 2, GRID_SIZE + offsetBase + 1.2, GRID_SIZE / 2);
     const pTopTarget = project3D(GRID_SIZE / 2, GRID_SIZE + 0.4, GRID_SIZE / 2);
     drawArrow(pTopBase, pTopTarget, '#d97706', "TOP ↓", -20, -10);
@@ -512,6 +510,7 @@
       }
     };
 
+    // FRONT VIEW
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const x = u;
@@ -526,6 +525,7 @@
       }
     }
 
+    // TOP VIEW
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const x = u;
@@ -540,6 +540,7 @@
       }
     }
 
+    // RIGHT SIDE VIEW
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const z = (GRID_SIZE - 1) - u;
@@ -603,6 +604,7 @@
       orthoCtx.fillStyle = "#475569";
       orthoCtx.fillText(v.name, ox, oy - 10);
 
+      // Draw Student Choices (Blue)
       for (let u = 0; u < GRID_SIZE; u++) {
         for (let vIdx = 0; vIdx < GRID_SIZE; vIdx++) {
           const cx = ox + u * layout.cellSize;
@@ -615,6 +617,7 @@
         }
       }
 
+      // Draw Revealed Solution Overlay
       if (showSolution) {
         for (let u = 0; u < GRID_SIZE; u++) {
           for (let vIdx = 0; vIdx < GRID_SIZE; vIdx++) {
@@ -636,6 +639,7 @@
       }
     });
 
+    // Drawing Alignment Guidelines
     orthoCtx.strokeStyle = '#94a3b8';
     orthoCtx.setLineDash([3, 3]);
     
