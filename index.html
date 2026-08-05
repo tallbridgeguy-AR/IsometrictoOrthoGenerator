@@ -318,8 +318,9 @@
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0xfafafa);
 
-        camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-        camera.position.set(6, 6, 9);
+        // Reduced Field of View (FOV) from 45 to 28 to make the model fill more of the left panel
+        camera = new THREE.PerspectiveCamera(28, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(5.5, 5.5, 8.2);
         camera.lookAt(0, 0, 0);
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -495,19 +496,13 @@
 
     // --- Orthographic Solution Logic ---
     function calculateSolutions() {
-        // Create 3x3 boolean maps for projections
         solutionProjections.top = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(false));
         solutionProjections.front = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(false));
         solutionProjections.right = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(false));
 
         activeBlocks.forEach(b => {
-            // Top View: projected onto (x, z) - inverted z for standard top view orientation
             solutionProjections.top[b.z][b.x] = true;
-            
-            // Front View: projected onto (x, y) - y inverted for grid row indexing (top row = high y)
             solutionProjections.front[2 - b.y][b.x] = true;
-
-            // Right View: projected onto (z, y) - z from left to right, y top down
             solutionProjections.right[2 - b.y][2 - b.z] = true;
         });
     }
@@ -526,7 +521,6 @@
                     cell.dataset.view = view;
                     cell.addEventListener('click', () => {
                         cell.classList.toggle('active');
-                        // Remove status colors when user edits canvas
                         cell.classList.remove('correct', 'incorrect', 'missed');
                     });
                     gridEl.appendChild(cell);
@@ -554,7 +548,6 @@
                 const isSelected = cell.classList.contains('active');
                 const shouldBeSelected = solutionProjections[view][r][c];
 
-                // Clear previous check classes
                 cell.classList.remove('correct', 'incorrect', 'missed');
 
                 if (isSelected && shouldBeSelected) {
