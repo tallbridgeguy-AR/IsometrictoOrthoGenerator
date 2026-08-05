@@ -180,14 +180,14 @@
 <body>
 
 <header>
-  <h1>CE 101: 3D Solid Block Orthographic Practice</h1>
+  <h1>CE 101: 3D Block Orthographic Practice</h1>
   <div class="controls">
     <label for="sizeSelect">Grid Size:</label>
     <select id="sizeSelect">
       <option value="2">2 x 2 x 2</option>
       <option value="3" selected>3 x 3 x 3</option>
     </select>
-    <button id="btnNew">Reset Model</button>
+    <button id="btnNew">New Model</button>
     <button id="btnClear" class="btn-outline">Clear Workspace</button>
     <button id="btnCheck" class="btn-success">Check Answer</button>
   </div>
@@ -196,10 +196,10 @@
 <div class="main-container">
   <!-- Left Panel: 3D Solid Model -->
   <div class="panel">
-    <div class="panel-title">3D Solid Engineering Block</div>
+    <div class="panel-title">3D Solid Model</div>
     <canvas id="isoCanvas" width="380" height="420"></canvas>
     <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">
-      Arrows indicate observer sightlines: Front view looks <strong>↗ North-East</strong> into face, Right view looks <strong>↖ North-West</strong> into face.
+      Front view sightline looks <strong>↗ North-East</strong> into the model. Right side view looks <strong>↖ North-West</strong>.
     </p>
   </div>
 
@@ -207,7 +207,7 @@
   <div class="panel">
     <div class="panel-title">Orthographic Drawing Workspace</div>
     <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-      Click grid cells to shade the 2D projected faces. Toggle solution overlay or check your work when complete.
+      Click grid cells to shade the projected faces. Check your work or reveal the solution overlay.
     </p>
     
     <canvas id="orthoCanvas" width="680" height="420"></canvas>
@@ -223,9 +223,19 @@
 <script>
   let GRID_SIZE = 3;
   let grid = [];
+  let colorGrid = [];
   let studentGrid = {};
 
-  const BASE_COLOR = '#2563eb'; // Engineering Blue
+  // Palette similar to structural modeling software
+  const PALETTE = [
+    '#e11d48', // Red
+    '#ea580c', // Orange
+    '#16a34a', // Emerald Green
+    '#2563eb', // Royal Blue
+    '#c026d3', // Magenta
+    '#0891b2', // Cyan
+    '#d97706'  // Gold
+  ];
 
   const isoCanvas = document.getElementById('isoCanvas');
   const orthoCanvas = document.getElementById('orthoCanvas');
@@ -268,17 +278,48 @@
     resetStudentGrid();
     statusBar.style.display = 'none';
 
-    // Build a complete solid 3D Block (N x N x N)
     grid = Array.from({ length: GRID_SIZE }, () =>
       Array.from({ length: GRID_SIZE }, () =>
-        Array(GRID_SIZE).fill(true)
+        Array(GRID_SIZE).fill(false)
       )
     );
+
+    colorGrid = Array.from({ length: GRID_SIZE }, () =>
+      Array.from({ length: GRID_SIZE }, () =>
+        Array(GRID_SIZE).fill(null)
+      )
+    );
+
+    // Procedurally build realistic civil engineering 3D composite blocks
+    // 1. Build ground footprint
+    for (let x = 0; x < GRID_SIZE; x++) {
+      for (let z = 0; z < GRID_SIZE; z++) {
+        if (Math.random() > 0.3) {
+          grid[x][0][z] = true;
+          colorGrid[x][0][z] = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+        }
+      }
+    }
+    // Ensure at least origin block exists
+    grid[0][0][0] = true;
+    if (!colorGrid[0][0][0]) colorGrid[0][0][0] = PALETTE[0];
+
+    // 2. Build upward columns with gravity support
+    for (let y = 1; y < GRID_SIZE; y++) {
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let z = 0; z < GRID_SIZE; z++) {
+          if (grid[x][y - 1][z] && Math.random() > 0.45) {
+            grid[x][y][z] = true;
+            colorGrid[x][y][z] = colorGrid[x][y - 1][z]; // Maintain block color up column
+          }
+        }
+      }
+    }
 
     renderAll();
   }
 
-  // Draw 3D Isometric Solid Block
+  // Draw 3D Isometric View
   function drawIsometric() {
     isoCtx.clearRect(0, 0, 380, 420);
 
@@ -317,11 +358,13 @@
       isoCtx.stroke();
     }
 
-    // Render 3D solid cube structure
+    // Draw blocks using Painter's Algorithm (back to front)
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let z = 0; z < GRID_SIZE; z++) {
         for (let x = 0; x < GRID_SIZE; x++) {
           if (!grid[x][y][z]) continue;
+
+          const baseColor = colorGrid[x][y][z] || '#2563eb';
 
           const p0 = isoProject(x, y, z);
           const p1 = isoProject(x + 1, y, z);
@@ -332,21 +375,25 @@
           const p6 = isoProject(x + 1, y + 1, z + 1);
           const p7 = isoProject(x, y + 1, z + 1);
 
-          // Render only outer exposed faces for a clean solid block look
-          if (y === GRID_SIZE - 1) {
-            drawIsoFace(p3, p2, p6, p7, adjustColor(BASE_COLOR, 60), adjustColor(BASE_COLOR, 30));
+          // Top Face (+Y)
+          if (y === GRID_SIZE - 1 || !grid[x][y + 1][z]) {
+            drawIsoFace(p3, p2, p6, p7, adjustColor(baseColor, 50), adjustColor(baseColor, 15));
           }
-          if (z === GRID_SIZE - 1) {
-            drawIsoFace(p4, p5, p6, p7, BASE_COLOR, adjustColor(BASE_COLOR, -20));
+
+          // Front Face (+Z)
+          if (z === GRID_SIZE - 1 || !grid[x][y][z + 1]) {
+            drawIsoFace(p4, p5, p6, p7, baseColor, adjustColor(baseColor, -20));
           }
-          if (x === GRID_SIZE - 1) {
-            drawIsoFace(p1, p5, p6, p2, adjustColor(BASE_COLOR, -30), adjustColor(BASE_COLOR, -50));
+
+          // Right Face (+X)
+          if (x === GRID_SIZE - 1 || !grid[x + 1][y][z]) {
+            drawIsoFace(p1, p5, p6, p2, adjustColor(baseColor, -25), adjustColor(baseColor, -45));
           }
         }
       }
     }
 
-    // Helper: Draw sightline arrows looking AT the block (180° rotated)
+    // Helper: Draw sightline arrows looking AT the block
     function drawArrow(fromX, fromY, toX, toY, color, label) {
       const headlen = 10;
       const dx = toX - fromX;
@@ -377,26 +424,75 @@
       }
     }
 
-    // 1. FRONT View Sightline Arrow (Pointing ↗ at front face)
+    // Sightline Arrows
     const [fx, fy] = isoProject(GRID_SIZE / 2, 0, GRID_SIZE);
     drawArrow(fx - 45, fy + 30, fx - 10, fy + 8, '#4f46e5', "FRONT ↗");
 
-    // 2. RIGHT View Sightline Arrow (Pointing ↖ at right face)
     const [rx, ry] = isoProject(GRID_SIZE, 0, GRID_SIZE / 2);
     drawArrow(rx + 45, ry + 30, rx + 10, ry + 8, '#059669', "↖ RIGHT");
 
-    // 3. TOP View Sightline Arrow (Pointing ↓ at top face)
     const [tx, ty] = isoProject(GRID_SIZE / 2, GRID_SIZE, GRID_SIZE / 2);
     drawArrow(tx, ty - 40, tx, ty - 10, '#d97706', "TOP ↓");
   }
 
-  // Calculate True Orthographic Ground Truth
+  // Calculate True Orthographic Projections
   function getGroundTruth() {
     const truth = {
-      front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(true)),
-      top: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(true)),
-      right: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(true))
+      front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
+      top: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
+      right: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
+      colors: {
+        front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null)),
+        top: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null)),
+        right: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null))
+      }
     };
+
+    // 1. FRONT VIEW: u = x, v = GRID_SIZE - 1 - y (Ray along z)
+    for (let u = 0; u < GRID_SIZE; u++) {
+      for (let v = 0; v < GRID_SIZE; v++) {
+        const x = u;
+        const y = GRID_SIZE - 1 - v;
+        for (let z = GRID_SIZE - 1; z >= 0; z--) {
+          if (grid[x][y][z]) {
+            truth.front[u][v] = true;
+            truth.colors.front[u][v] = colorGrid[x][y][z];
+            break;
+          }
+        }
+      }
+    }
+
+    // 2. TOP VIEW: u = x, v = z (Ray along y)
+    for (let u = 0; u < GRID_SIZE; u++) {
+      for (let v = 0; v < GRID_SIZE; v++) {
+        const x = u;
+        const z = v;
+        for (let y = GRID_SIZE - 1; y >= 0; y--) {
+          if (grid[x][y][z]) {
+            truth.top[u][v] = true;
+            truth.colors.top[u][v] = colorGrid[x][y][z];
+            break;
+          }
+        }
+      }
+    }
+
+    // 3. RIGHT SIDE VIEW: u = z, v = GRID_SIZE - 1 - y (Ray along x)
+    for (let u = 0; u < GRID_SIZE; u++) {
+      for (let v = 0; v < GRID_SIZE; v++) {
+        const z = u;
+        const y = GRID_SIZE - 1 - v;
+        for (let x = GRID_SIZE - 1; x >= 0; x--) {
+          if (grid[x][y][z]) {
+            truth.right[u][v] = true;
+            truth.colors.right[u][v] = colorGrid[x][y][z];
+            break;
+          }
+        }
+      }
+    }
+
     return truth;
   }
 
@@ -444,12 +540,12 @@
         orthoCtx.stroke();
       }
 
-      // View Title
+      // Title
       orthoCtx.font = "bold 12px sans-serif";
       orthoCtx.fillStyle = "#475569";
       orthoCtx.fillText(v.name, ox, oy - 10);
 
-      // Render Student Work
+      // Render Student Input
       for (let u = 0; u < GRID_SIZE; u++) {
         for (let vIdx = 0; vIdx < GRID_SIZE; vIdx++) {
           const cx = ox + u * layout.cellSize;
@@ -471,10 +567,11 @@
             const isFilled = truth[v.key][u][vIdx];
 
             if (isFilled) {
-              orthoCtx.fillStyle = 'rgba(16, 185, 129, 0.45)';
+              const faceCol = truth.colors[v.key][u][vIdx] || '#10b981';
+              orthoCtx.fillStyle = faceCol;
               orthoCtx.fillRect(cx + 2, cy + 2, layout.cellSize - 4, layout.cellSize - 4);
 
-              orthoCtx.strokeStyle = '#10b981';
+              orthoCtx.strokeStyle = '#0f172a';
               orthoCtx.lineWidth = 2;
               orthoCtx.strokeRect(cx + 1, cy + 1, layout.cellSize - 2, layout.cellSize - 2);
             }
@@ -483,11 +580,11 @@
       }
     });
 
-    // Orthographic Projection Alignment Lines (Standard Engineering Convention)
+    // Projection Alignment Lines
     orthoCtx.strokeStyle = '#94a3b8';
     orthoCtx.setLineDash([3, 3]);
     
-    // Vertical Alignment (Top View -> Front View)
+    // Vertical Alignment (Top -> Front)
     for (let i = 0; i <= GRID_SIZE; i++) {
       const x = layout.top.x + i * layout.cellSize;
       orthoCtx.beginPath();
@@ -496,7 +593,7 @@
       orthoCtx.stroke();
     }
 
-    // Horizontal Alignment (Front View -> Right Side View)
+    // Horizontal Alignment (Front -> Right)
     for (let i = 0; i <= GRID_SIZE; i++) {
       const y = layout.front.y + i * layout.cellSize;
       orthoCtx.beginPath();
@@ -507,7 +604,7 @@
     orthoCtx.setLineDash([]);
   }
 
-  // Workspace Click Handler for Student Input
+  // Interactive Click Listener
   orthoCanvas.addEventListener('click', (e) => {
     const rect = orthoCanvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
@@ -532,7 +629,7 @@
     });
   });
 
-  // Grade Student Submission
+  // Grading Function
   function checkAnswer() {
     const truth = getGroundTruth();
     let totalCells = GRID_SIZE * GRID_SIZE * 3;
@@ -551,10 +648,10 @@
     const percent = Math.round((correctCells / totalCells) * 100);
     if (percent === 100) {
       statusBar.className = "status-bar success";
-      statusBar.textContent = "🎉 Outstanding! All 3 orthographic views match the solid block projection!";
+      statusBar.textContent = "🎉 Excellent! All views match the 3D model standard projection perfectly.";
     } else {
       statusBar.className = "status-bar error";
-      statusBar.textContent = `Score: ${percent}%. Review your shaded cells or toggle 'Reveal Solution Overlay' for help.`;
+      statusBar.textContent = `Score: ${percent}%. Check your shaded faces or reveal the solution overlay.`;
     }
   }
 
@@ -563,7 +660,6 @@
     drawOrthographic();
   }
 
-  // Event Listeners
   document.getElementById('btnNew').addEventListener('click', generateShape);
   document.getElementById('btnClear').addEventListener('click', () => {
     resetStudentGrid();
@@ -574,7 +670,6 @@
   sizeSelect.addEventListener('change', generateShape);
   chkSolution.addEventListener('change', drawOrthographic);
 
-  // Initial Load
   generateShape();
 </script>
 </body>
