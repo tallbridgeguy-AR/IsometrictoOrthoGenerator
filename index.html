@@ -194,12 +194,12 @@
 </header>
 
 <div class="main-container">
-  <!-- Left Panel: 3D Solid Isometric View -->
+  <!-- Left Panel: 3D Solid Model -->
   <div class="panel">
     <div class="panel-title">3D Solid Model</div>
     <canvas id="isoCanvas" width="380" height="420"></canvas>
     <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">
-      Observe the model angles: Front (left face), Right (right face), and Top.
+      Front view faces <strong>↙ Left</strong>, Right view faces <strong>↘ Right</strong>.
     </p>
   </div>
 
@@ -207,7 +207,7 @@
   <div class="panel">
     <div class="panel-title">Orthographic Drawing Workspace</div>
     <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-      Click grid cells to fill the views. Check your answer or reveal the solution when ready.
+      Click grid cells to fill views. Check your work or reveal the solution when ready.
     </p>
     
     <canvas id="orthoCanvas" width="680" height="420"></canvas>
@@ -233,7 +233,7 @@
     '#2563eb', // Royal Blue
     '#c026d3', // Magenta
     '#0891b2', // Cyan
-    '#d97706'  // Amber / Gold
+    '#d97706'  // Gold / Amber
   ];
 
   const isoCanvas = document.getElementById('isoCanvas');
@@ -289,10 +289,10 @@
       )
     );
 
-    // Build solid base
+    // Build solid base ground layer
     for (let x = 0; x < GRID_SIZE; x++) {
       for (let z = 0; z < GRID_SIZE; z++) {
-        if (Math.random() > 0.3) {
+        if (Math.random() > 0.35) {
           grid[x][0][z] = true;
           colorGrid[x][0][z] = PALETTE[Math.floor(Math.random() * PALETTE.length)];
         }
@@ -301,7 +301,7 @@
     grid[0][0][0] = true;
     if (!colorGrid[0][0][0]) colorGrid[0][0][0] = PALETTE[0];
 
-    // Build vertically with gravity support
+    // Build upper layers with gravity support
     for (let y = 1; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         for (let z = 0; z < GRID_SIZE; z++) {
@@ -355,7 +355,7 @@
       isoCtx.stroke();
     }
 
-    // Painter's algorithm: draw from back (0,0,0) to front
+    // Painter's algorithm: draw from back to front (y -> z -> x)
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let z = 0; z < GRID_SIZE; z++) {
         for (let x = 0; x < GRID_SIZE; x++) {
@@ -372,21 +372,21 @@
           const p6 = isoProject(x + 1, y + 1, z + 1);
           const p7 = isoProject(x, y + 1, z + 1);
 
-          // Top Face (+y)
+          // Top Face (+Y)
           drawIsoFace(
             p3, p2, p6, p7,
-            adjustColor(baseColor, 60),
-            adjustColor(baseColor, 20)
+            adjustColor(baseColor, 50),
+            adjustColor(baseColor, 15)
           );
 
-          // Front Face (+z, facing down-left)
+          // Front Face (+Z, facing down-left)
           drawIsoFace(
             p4, p5, p6, p7,
             baseColor,
             adjustColor(baseColor, -30)
           );
 
-          // Right Face (+x, facing down-right)
+          // Right Face (+X, facing down-right)
           drawIsoFace(
             p1, p5, p6, p2,
             adjustColor(baseColor, -20),
@@ -396,7 +396,7 @@
       }
     }
 
-    // Directional Labels
+    // Directional Annotations
     isoCtx.font = "bold 12px sans-serif";
     
     const [fx, fy] = isoProject(0, 0, GRID_SIZE);
@@ -412,7 +412,7 @@
     isoCtx.fillText("TOP ↓", tx - 18, ty - 15);
   }
 
-  // Calculate True Orthographic Projections & Visible Colors
+  // Calculate True Orthographic Projections & Visible Face Colors
   function getGroundTruth() {
     const truth = {
       front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
@@ -425,7 +425,7 @@
       }
     };
 
-    // 1. FRONT VIEW: u = x, v = GRID_SIZE - 1 - y. Ray along z (GRID_SIZE-1 down to 0)
+    // 1. FRONT VIEW: u = x, v = GRID_SIZE - 1 - y. Ray along z (front-most z=GRID_SIZE-1 down to 0)
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const x = u;
@@ -434,13 +434,13 @@
           if (grid[x][y][z]) {
             truth.front[u][v] = true;
             truth.colors.front[u][v] = colorGrid[x][y][z];
-            break; // First visible face from front
+            break;
           }
         }
       }
     }
 
-    // 2. TOP VIEW: u = x, v = z. Ray along y (GRID_SIZE-1 down to 0)
+    // 2. TOP VIEW: u = x, v = z (Back z=0 to Front z=GRID_SIZE-1). Ray along y (top-most y=GRID_SIZE-1 down to 0)
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const x = u;
@@ -449,13 +449,13 @@
           if (grid[x][y][z]) {
             truth.top[u][v] = true;
             truth.colors.top[u][v] = colorGrid[x][y][z];
-            break; // First visible face from top
+            break;
           }
         }
       }
     }
 
-    // 3. RIGHT VIEW: u = GRID_SIZE - 1 - z, v = GRID_SIZE - 1 - y. Ray along x (GRID_SIZE-1 down to 0)
+    // 3. RIGHT VIEW: u = GRID_SIZE - 1 - z (Front z=GRID_SIZE-1 to Back z=0), v = GRID_SIZE - 1 - y. Ray along x (right-most x=GRID_SIZE-1 down to 0)
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const z = GRID_SIZE - 1 - u;
@@ -464,7 +464,7 @@
           if (grid[x][y][z]) {
             truth.right[u][v] = true;
             truth.colors.right[u][v] = colorGrid[x][y][z];
-            break; // First visible face from right side
+            break;
           }
         }
       }
