@@ -305,7 +305,6 @@
       )
     );
 
-    // Strictly bounds blocks to exact grid bounds
     for (let x = 0; x < GRID_SIZE; x++) {
       for (let z = 0; z < GRID_SIZE; z++) {
         if (Math.random() > 0.35) {
@@ -333,7 +332,6 @@
     renderAll();
   }
 
-  // 3D Orbital Matrix Transformations
   function project3D(x, y, z) {
     const cx = (GRID_SIZE - 1) / 2;
     const cy = (GRID_SIZE - 1) / 2;
@@ -343,17 +341,16 @@
     let dy = y - cy;
     let dz = z - cz;
 
-    // Yaw Rotation (Horizontal)
     let x1 = dx * Math.cos(rotY) + dz * Math.sin(rotY);
     let z1 = -dx * Math.sin(rotY) + dz * Math.cos(rotY);
 
-    // Pitch Rotation (Vertical)
     let y2 = dy * Math.cos(rotX) - z1 * Math.sin(rotX);
     let z2 = dy * Math.sin(rotX) + z1 * Math.cos(rotX);
 
-    const scale = GRID_SIZE === 2 ? 65 : 45;
+    // Slightly reduced scale factor to give arrows breathing room
+    const scale = GRID_SIZE === 2 ? 55 : 38;
     const originX = 190;
-    const originY = 220;
+    const originY = 230;
 
     return {
       x: originX + x1 * scale,
@@ -362,7 +359,6 @@
     };
   }
 
-  // Render Dynamic 3D Solid Model with Rotation
   function drawIsometric() {
     isoCtx.clearRect(0, 0, 380, 420);
 
@@ -375,7 +371,6 @@
 
           const baseColor = colorGrid[x][y][z] || '#2563eb';
 
-          // Vertex coordinates of cube
           const verts = {
             c000: project3D(x, y, z),
             c100: project3D(x + 1, y, z),
@@ -392,27 +387,21 @@
             faces.push({ pA, pB, pC, pD, cStart, cEnd, avgZ });
           };
 
-          // Top Face (+Y)
           if (y === GRID_SIZE - 1 || !grid[x][y + 1][z]) {
             addFace(verts.c010, verts.c110, verts.c111, verts.c011, adjustColor(baseColor, 50), adjustColor(baseColor, 15));
           }
-          // Bottom Face (-Y)
           if (y === 0 || !grid[x][y - 1][z]) {
             addFace(verts.c001, verts.c101, verts.c100, verts.c000, adjustColor(baseColor, -40), adjustColor(baseColor, -60));
           }
-          // Front Face (+Z)
           if (z === GRID_SIZE - 1 || !grid[x][y][z + 1]) {
             addFace(verts.c001, verts.c101, verts.c111, verts.c011, baseColor, adjustColor(baseColor, -20));
           }
-          // Back Face (-Z)
           if (z === 0 || !grid[x][y][z - 1]) {
             addFace(verts.c100, verts.c000, verts.c010, verts.c110, adjustColor(baseColor, -30), adjustColor(baseColor, -50));
           }
-          // Right Face (+X)
           if (x === GRID_SIZE - 1 || !grid[x + 1][y][z]) {
             addFace(verts.c100, verts.c101, verts.c111, verts.c110, adjustColor(baseColor, -25), adjustColor(baseColor, -45));
           }
-          // Left Face (-X)
           if (x === 0 || !grid[x - 1][y][z]) {
             addFace(verts.c000, verts.c001, verts.c011, verts.c010, adjustColor(baseColor, -10), adjustColor(baseColor, -30));
           }
@@ -420,7 +409,6 @@
       }
     }
 
-    // Depth Sorting for 3D Faces
     faces.sort((a, b) => a.avgZ - b.avgZ);
 
     faces.forEach(f => {
@@ -442,8 +430,8 @@
       isoCtx.stroke();
     });
 
-    // Arrow Helper (MOVED UP FOR CLEARANCE)
-    function drawArrow(fromP, toP, color, label) {
+    // Drawing Arrow Labels with Increased Offsets
+    function drawArrow(fromP, toP, color, label, textOffsetX = 0, textOffsetY = 0) {
       const headlen = 10;
       const dx = toP.x - fromP.x;
       const dy = toP.y - fromP.y;
@@ -465,26 +453,29 @@
       isoCtx.closePath();
       isoCtx.fill();
 
-      isoCtx.font = "bold 12px sans-serif";
-      isoCtx.fillText(label, fromP.x - 20, fromP.y - 12);
+      isoCtx.font = "bold 13px sans-serif";
+      isoCtx.fillText(label, fromP.x + textOffsetX, fromP.y + textOffsetY);
     }
 
-    // Front, Right & Top Direction Indicators
-    const pFrontBase = project3D(GRID_SIZE / 2, 0, GRID_SIZE + 0.8);
-    const pFrontTarget = project3D(GRID_SIZE / 2, 0, GRID_SIZE);
-    drawArrow(pFrontBase, pFrontTarget, '#4f46e5', "FRONT");
+    // Dynamic Distances Pushed Significantly Further Off Canvas Center
+    const offsetBase = GRID_SIZE === 2 ? 1.8 : 1.5;
 
-    const pRightBase = project3D(GRID_SIZE + 0.8, 0, GRID_SIZE / 2);
-    const pRightTarget = project3D(GRID_SIZE, 0, GRID_SIZE / 2);
-    drawArrow(pRightBase, pRightTarget, '#059669', "RIGHT");
+    // FRONT Arrow
+    const pFrontBase = project3D(GRID_SIZE / 2, -0.3, GRID_SIZE + offsetBase);
+    const pFrontTarget = project3D(GRID_SIZE / 2, -0.3, GRID_SIZE + 0.3);
+    drawArrow(pFrontBase, pFrontTarget, '#4f46e5', "FRONT ↗", -55, 10);
 
-    // Top arrow moved substantially upwards (+2.2 Y OFFSET)
-    const pTopBase = project3D(GRID_SIZE / 2, GRID_SIZE + 2.2, GRID_SIZE / 2);
-    const pTopTarget = project3D(GRID_SIZE / 2, GRID_SIZE + 0.2, GRID_SIZE / 2);
-    drawArrow(pTopBase, pTopTarget, '#d97706', "TOP ↓");
+    // RIGHT Arrow
+    const pRightBase = project3D(GRID_SIZE + offsetBase, -0.3, GRID_SIZE / 2);
+    const pRightTarget = project3D(GRID_SIZE + 0.3, -0.3, GRID_SIZE / 2);
+    drawArrow(pRightBase, pRightTarget, '#059669', "↖ RIGHT", 10, 10);
+
+    // TOP Arrow (Pushed significantly above the highest point)
+    const pTopBase = project3D(GRID_SIZE / 2, GRID_SIZE + offsetBase + 1.2, GRID_SIZE / 2);
+    const pTopTarget = project3D(GRID_SIZE / 2, GRID_SIZE + 0.4, GRID_SIZE / 2);
+    drawArrow(pTopBase, pTopTarget, '#d97706', "TOP ↓", -20, -10);
   }
 
-  // Mouse Interactive 3D Rotations
   isoCanvas.addEventListener('mousedown', (e) => {
     isDragging = true;
     lastMouseX = e.clientX;
@@ -499,7 +490,6 @@
     rotY += dx * 0.01;
     rotX += dy * 0.01;
 
-    // Clamp vertical tilt range
     rotX = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, rotX));
 
     lastMouseX = e.clientX;
@@ -510,7 +500,6 @@
 
   window.addEventListener('mouseup', () => { isDragging = false; });
 
-  // Calculate True Orthographic Projections
   function getGroundTruth() {
     const truth = {
       front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
@@ -523,7 +512,6 @@
       }
     };
 
-    // FRONT VIEW
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const x = u;
@@ -538,7 +526,6 @@
       }
     }
 
-    // TOP VIEW
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const x = u;
@@ -553,7 +540,6 @@
       }
     }
 
-    // RIGHT SIDE VIEW
     for (let u = 0; u < GRID_SIZE; u++) {
       for (let v = 0; v < GRID_SIZE; v++) {
         const z = (GRID_SIZE - 1) - u;
