@@ -399,6 +399,9 @@
     }
 
     function generateNewSolidModel() {
+        // Reset camera rotation back to isometric view
+        resetView();
+
         while(modelGroup.children.length > 0) { 
             modelGroup.remove(modelGroup.children[0]); 
         }
