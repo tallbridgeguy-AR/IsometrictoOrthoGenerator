@@ -338,11 +338,6 @@
         dirLight.position.set(10, 20, 15);
         scene.add(dirLight);
 
-        // High contrast ground floor grid helper
-        const gridHelper = new THREE.GridHelper(3, 3, 0x2b6cb0, 0x718096);
-        gridHelper.position.y = -1.5;
-        scene.add(gridHelper);
-
         modelGroup = new THREE.Group();
         scene.add(modelGroup);
 
@@ -459,6 +454,11 @@
 
             modelGroup.add(cube);
         });
+
+        // --- ATTACH FLOOR GRID DIRECTLY TO MODEL GROUP (ROTATES WITH MODEL) ---
+        const floorGrid = new THREE.GridHelper(3, 3, 0x2b6cb0, 0x4a5568);
+        floorGrid.position.y = -offset - 0.49; // Placed right underneath the bottom blocks
+        modelGroup.add(floorGrid);
 
         createCleanLabels();
         calculateSolutions();
