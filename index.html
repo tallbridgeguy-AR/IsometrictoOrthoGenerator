@@ -8,7 +8,7 @@
     :root {
       --bg-color: #f1f5f9;
       --card-bg: #ffffff;
-      --border-color: #e2e8f0;
+      --border-color: #cbd5e1;
       --primary: #4f46e5;
       --primary-hover: #4338ca;
       --success: #10b981;
@@ -214,7 +214,6 @@
 
     <div class="checkbox-group">
       <label><input type="checkbox" id="chkSolution" /> Reveal Solution Overlay</label>
-      <label><input type="checkbox" id="chkHidden" /> Show Hidden Lines</label>
     </div>
 
     <div id="statusBar" class="status-bar"></div>
@@ -227,7 +226,6 @@
   let colorGrid = [];
   let studentGrid = {};
 
-  // Palette of rich solid block colors
   const PALETTE = [
     '#e11d48', // Red
     '#ea580c', // Orange
@@ -235,14 +233,13 @@
     '#2563eb', // Royal Blue
     '#c026d3', // Magenta
     '#0891b2', // Cyan
-    '#ca8a04'  // Gold / Yellow
+    '#d97706'  // Amber / Gold
   ];
 
   const isoCanvas = document.getElementById('isoCanvas');
   const orthoCanvas = document.getElementById('orthoCanvas');
   const sizeSelect = document.getElementById('sizeSelect');
   const chkSolution = document.getElementById('chkSolution');
-  const chkHidden = document.getElementById('chkHidden');
   const statusBar = document.getElementById('statusBar');
 
   function setupHiDPI(canvas, width, height) {
@@ -259,7 +256,6 @@
   const isoCtx = setupHiDPI(isoCanvas, 380, 420);
   const orthoCtx = setupHiDPI(orthoCanvas, 680, 420);
 
-  // Helper function to shift brightness for shading & lighting highlights
   function adjustColor(col, amt) {
     let num = parseInt(col.slice(1), 16);
     let r = Math.min(255, Math.max(0, (num >> 16) + amt));
@@ -293,10 +289,10 @@
       )
     );
 
-    // Ground layer generation
+    // Build solid base
     for (let x = 0; x < GRID_SIZE; x++) {
       for (let z = 0; z < GRID_SIZE; z++) {
-        if (Math.random() > 0.35) {
+        if (Math.random() > 0.3) {
           grid[x][0][z] = true;
           colorGrid[x][0][z] = PALETTE[Math.floor(Math.random() * PALETTE.length)];
         }
@@ -305,16 +301,13 @@
     grid[0][0][0] = true;
     if (!colorGrid[0][0][0]) colorGrid[0][0][0] = PALETTE[0];
 
-    // Upper layers with gravity constraint
+    // Build vertically with gravity support
     for (let y = 1; y < GRID_SIZE; y++) {
       for (let x = 0; x < GRID_SIZE; x++) {
         for (let z = 0; z < GRID_SIZE; z++) {
           if (grid[x][y - 1][z] && Math.random() > 0.45) {
             grid[x][y][z] = true;
-            // Either inherit color or pick a new vibrant color
-            colorGrid[x][y][z] = Math.random() > 0.5 
-              ? PALETTE[Math.floor(Math.random() * PALETTE.length)]
-              : colorGrid[x][y - 1][z];
+            colorGrid[x][y][z] = PALETTE[Math.floor(Math.random() * PALETTE.length)];
           }
         }
       }
@@ -323,7 +316,7 @@
     renderAll();
   }
 
-  // Draw 3D Isometric View with Solid Shading & Gradients
+  // Draw 3D Isometric View
   function drawIsometric() {
     isoCtx.clearRect(0, 0, 380, 420);
 
@@ -362,7 +355,7 @@
       isoCtx.stroke();
     }
 
-    // Painter's Algorithm: render back-to-front
+    // Painter's algorithm: draw from back (0,0,0) to front
     for (let y = 0; y < GRID_SIZE; y++) {
       for (let z = 0; z < GRID_SIZE; z++) {
         for (let x = 0; x < GRID_SIZE; x++) {
@@ -379,31 +372,31 @@
           const p6 = isoProject(x + 1, y + 1, z + 1);
           const p7 = isoProject(x, y + 1, z + 1);
 
-          // Top Face (Highlighted sheen)
+          // Top Face (+y)
           drawIsoFace(
             p3, p2, p6, p7,
-            adjustColor(baseColor, 70),
-            adjustColor(baseColor, 30)
+            adjustColor(baseColor, 60),
+            adjustColor(baseColor, 20)
           );
 
-          // Left/Front Face
+          // Front Face (+z, facing down-left)
           drawIsoFace(
             p4, p5, p6, p7,
             baseColor,
-            adjustColor(baseColor, -35)
+            adjustColor(baseColor, -30)
           );
 
-          // Right Face (Shaded)
+          // Right Face (+x, facing down-right)
           drawIsoFace(
             p1, p5, p6, p2,
-            adjustColor(baseColor, -25),
-            adjustColor(baseColor, -65)
+            adjustColor(baseColor, -20),
+            adjustColor(baseColor, -50)
           );
         }
       }
     }
 
-    // Directional Annotations
+    // Directional Labels
     isoCtx.font = "bold 12px sans-serif";
     
     const [fx, fy] = isoProject(0, 0, GRID_SIZE);
@@ -419,12 +412,12 @@
     isoCtx.fillText("TOP ↓", tx - 18, ty - 15);
   }
 
-  // Calculate True Projections and Colors
+  // Calculate True Orthographic Projections & Visible Colors
   function getGroundTruth() {
     const truth = {
-      front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(Infinity)),
-      top: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(Infinity)),
-      right: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(Infinity)),
+      front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
+      top: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
+      right: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false)),
       colors: {
         front: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null)),
         top: Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null)),
@@ -432,36 +425,51 @@
       }
     };
 
-    for (let x = 0; x < GRID_SIZE; x++) {
-      for (let y = 0; y < GRID_SIZE; y++) {
-        for (let z = 0; z < GRID_SIZE; z++) {
-          if (!grid[x][y][z]) continue;
-
-          // Front View: u=x, v=(GRID_SIZE-1-y), depth=z
-          const fu = x, fv = GRID_SIZE - 1 - y;
-          if (z < truth.front[fu][fv]) {
-            truth.front[fu][fv] = z;
-            truth.colors.front[fu][fv] = colorGrid[x][y][z];
-          }
-
-          // Top View: u=x, v=(GRID_SIZE-1-z), depth=(GRID_SIZE-1-y)
-          const tu = x, tv = GRID_SIZE - 1 - z;
-          const td = GRID_SIZE - 1 - y;
-          if (td < truth.top[tu][tv]) {
-            truth.top[tu][tv] = td;
-            truth.colors.top[tu][tv] = colorGrid[x][y][z];
-          }
-
-          // Right View: u=z, v=(GRID_SIZE-1-y), depth=(GRID_SIZE-1-x)
-          const ru = z, rv = GRID_SIZE - 1 - y;
-          const rd = GRID_SIZE - 1 - x;
-          if (rd < truth.right[ru][rv]) {
-            truth.right[ru][rv] = rd;
-            truth.colors.right[ru][rv] = colorGrid[x][y][z];
+    // 1. FRONT VIEW: u = x, v = GRID_SIZE - 1 - y. Ray along z (GRID_SIZE-1 down to 0)
+    for (let u = 0; u < GRID_SIZE; u++) {
+      for (let v = 0; v < GRID_SIZE; v++) {
+        const x = u;
+        const y = GRID_SIZE - 1 - v;
+        for (let z = GRID_SIZE - 1; z >= 0; z--) {
+          if (grid[x][y][z]) {
+            truth.front[u][v] = true;
+            truth.colors.front[u][v] = colorGrid[x][y][z];
+            break; // First visible face from front
           }
         }
       }
     }
+
+    // 2. TOP VIEW: u = x, v = z. Ray along y (GRID_SIZE-1 down to 0)
+    for (let u = 0; u < GRID_SIZE; u++) {
+      for (let v = 0; v < GRID_SIZE; v++) {
+        const x = u;
+        const z = v;
+        for (let y = GRID_SIZE - 1; y >= 0; y--) {
+          if (grid[x][y][z]) {
+            truth.top[u][v] = true;
+            truth.colors.top[u][v] = colorGrid[x][y][z];
+            break; // First visible face from top
+          }
+        }
+      }
+    }
+
+    // 3. RIGHT VIEW: u = GRID_SIZE - 1 - z, v = GRID_SIZE - 1 - y. Ray along x (GRID_SIZE-1 down to 0)
+    for (let u = 0; u < GRID_SIZE; u++) {
+      for (let v = 0; v < GRID_SIZE; v++) {
+        const z = GRID_SIZE - 1 - u;
+        const y = GRID_SIZE - 1 - v;
+        for (let x = GRID_SIZE - 1; x >= 0; x--) {
+          if (grid[x][y][z]) {
+            truth.right[u][v] = true;
+            truth.colors.right[u][v] = colorGrid[x][y][z];
+            break; // First visible face from right side
+          }
+        }
+      }
+    }
+
     return truth;
   }
 
@@ -478,13 +486,12 @@
     };
   }
 
-  // Draw Orthographic View Workspace
+  // Draw 2D Orthographic Canvas
   function drawOrthographic() {
     orthoCtx.clearRect(0, 0, 680, 420);
     const layout = getOrthoLayout();
     const truth = getGroundTruth();
     const showSolution = chkSolution.checked;
-    const showHidden = chkHidden.checked;
 
     const views = [
       { name: 'TOP VIEW', key: 'top', origin: layout.top },
@@ -515,7 +522,7 @@
       orthoCtx.fillStyle = "#475569";
       orthoCtx.fillText(v.name, ox, oy - 10);
 
-      // Render Student Fills
+      // Render Student Work
       for (let u = 0; u < GRID_SIZE; u++) {
         for (let vIdx = 0; vIdx < GRID_SIZE; vIdx++) {
           const cx = ox + u * layout.cellSize;
@@ -528,40 +535,22 @@
         }
       }
 
-      // Render Solution Overlay
+      // Render Solution Overlay with Color Match
       if (showSolution) {
         for (let u = 0; u < GRID_SIZE; u++) {
           for (let vIdx = 0; vIdx < GRID_SIZE; vIdx++) {
             const cx = ox + u * layout.cellSize;
             const cy = oy + vIdx * layout.cellSize;
-            const isFilled = truth[v.key][u][vIdx] < Infinity;
+            const isFilled = truth[v.key][u][vIdx];
 
             if (isFilled) {
               const faceCol = truth.colors[v.key][u][vIdx] || '#10b981';
-              orthoCtx.fillStyle = faceCol + '55'; // Semi-transparent overlay
+              orthoCtx.fillStyle = faceCol;
               orthoCtx.fillRect(cx + 2, cy + 2, layout.cellSize - 4, layout.cellSize - 4);
 
-              orthoCtx.strokeStyle = '#10b981';
-              orthoCtx.lineWidth = 3;
+              orthoCtx.strokeStyle = '#0f172a';
+              orthoCtx.lineWidth = 2;
               orthoCtx.strokeRect(cx + 1, cy + 1, layout.cellSize - 2, layout.cellSize - 2);
-            }
-
-            // Hidden features logic
-            if (showHidden) {
-              let hasHiddenFeature = false;
-              for (let d = 1; d < GRID_SIZE; d++) {
-                if (v.key === 'front' && grid[u][GRID_SIZE - 1 - vIdx][d]) hasHiddenFeature = true;
-                if (v.key === 'top' && grid[u][GRID_SIZE - 1 - d][GRID_SIZE - 1 - vIdx]) hasHiddenFeature = true;
-                if (v.key === 'right' && grid[GRID_SIZE - 1 - d][GRID_SIZE - 1 - vIdx][u]) hasHiddenFeature = true;
-              }
-
-              if (!isFilled && hasHiddenFeature) {
-                orthoCtx.strokeStyle = '#ef4444';
-                orthoCtx.setLineDash([4, 3]);
-                orthoCtx.lineWidth = 2;
-                orthoCtx.strokeRect(cx + 4, cy + 4, layout.cellSize - 8, layout.cellSize - 8);
-                orthoCtx.setLineDash([]);
-              }
             }
           }
         }
@@ -572,6 +561,7 @@
     orthoCtx.strokeStyle = '#94a3b8';
     orthoCtx.setLineDash([3, 3]);
     
+    // Vertical Alignment (Top -> Front)
     for (let i = 0; i <= GRID_SIZE; i++) {
       const x = layout.top.x + i * layout.cellSize;
       orthoCtx.beginPath();
@@ -580,6 +570,7 @@
       orthoCtx.stroke();
     }
 
+    // Horizontal Alignment (Front -> Right)
     for (let i = 0; i <= GRID_SIZE; i++) {
       const y = layout.front.y + i * layout.cellSize;
       orthoCtx.beginPath();
@@ -590,7 +581,7 @@
     orthoCtx.setLineDash([]);
   }
 
-  // Interactive Click Handlers for Workspace
+  // Workspace Click Handler
   orthoCanvas.addEventListener('click', (e) => {
     const rect = orthoCanvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
@@ -615,7 +606,7 @@
     });
   });
 
-  // Grade student answer
+  // Grade student work
   function checkAnswer() {
     const truth = getGroundTruth();
     let totalCells = GRID_SIZE * GRID_SIZE * 3;
@@ -624,7 +615,7 @@
     ['front', 'top', 'right'].forEach(key => {
       for (let u = 0; u < GRID_SIZE; u++) {
         for (let v = 0; v < GRID_SIZE; v++) {
-          const expected = truth[key][u][v] < Infinity;
+          const expected = truth[key][u][v];
           const actual = studentGrid[key][u][v];
           if (expected === actual) correctCells++;
         }
@@ -634,10 +625,10 @@
     const percent = Math.round((correctCells / totalCells) * 100);
     if (percent === 100) {
       statusBar.className = "status-bar success";
-      statusBar.textContent = "🎉 Perfect! All views are 100% correct!";
+      statusBar.textContent = "🎉 Excellent! All views are 100% correct!";
     } else {
       statusBar.className = "status-bar error";
-      statusBar.textContent = `Score: ${percent}%. Keep adjusting or toggle 'Reveal Solution Overlay' to check your work.`;
+      statusBar.textContent = `Score: ${percent}%. Keep trying! Toggle 'Reveal Solution Overlay' to check your work.`;
     }
   }
 
@@ -655,7 +646,6 @@
   document.getElementById('btnCheck').addEventListener('click', checkAnswer);
   sizeSelect.addEventListener('change', generateShape);
   chkSolution.addEventListener('change', drawOrthographic);
-  chkHidden.addEventListener('change', drawOrthographic);
 
   generateShape();
 </script>
